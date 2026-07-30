@@ -85,6 +85,14 @@ type Model struct {
 	cursors [tabCount]int
 	errs    [tabCount]error
 
+	// filter, etkin sekmedeki listeyi süzer. filtering true iken tuşlar
+	// filtre metnine yazılır.
+	filter    string
+	filtering bool
+
+	// marked, toplu işlem için işaretli satırların gerçek indeksleri.
+	marked map[tabID]map[int]bool
+
 	distros    []wsl.Distro
 	containers []wslc.Container
 	images     []wslc.Image
@@ -113,6 +121,7 @@ type Model struct {
 	config  configModel
 	inspect inspectModel
 	menu    menuModel
+	system  systemModel
 
 	// progressPath boş değilken, süren işin yazdığı dosya büyüdükçe ilerleme
 	// gösterilir. wsl --export yüzde bildirmediği için ilerleme, dosyanın o
@@ -144,6 +153,7 @@ func New() Model {
 		wslcOK:   wslc.Available(),
 		data:     data,
 		dataPath: path,
+		marked:   map[tabID]map[int]bool{},
 	}
 }
 
@@ -306,10 +316,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Kabuktan dönerken ekran kirlenmiş olabilir; liste hemen tazelenir.
 		return m, m.load(m.active)
 
+	case installDoneMsg:
+		m.noticeAt = time.Now()
+		if msg.err != nil {
+			m.notice, m.noticeErr = msg.name+" kurulamadı: "+msg.err.Error(), true
+		} else {
+			m.notice, m.noticeErr = msg.name+" kuruldu", false
+		}
+		// Distro listesi de değiştiği için iki sekme birden tazelenir.
+		return m, tea.Batch(m.load(tabDistros), m.load(m.active))
+
+	case pullDoneMsg:
+		m.noticeAt = time.Now()
+		if msg.err != nil {
+			m.notice, m.noticeErr = msg.image+" çekilemedi: "+msg.err.Error(), true
+		} else {
+			m.notice, m.noticeErr = msg.image+" çekildi", false
+		}
+		return m, tea.Batch(m.load(tabImages), m.load(m.active))
+
+	case systemMsg:
+		m.busy, m.busyLabel = false, ""
+		m.system = systemModel{
+			active: true, status: msg.status, version: msg.version,
+			total: msg.total, running: msg.running, diskTotal: msg.diskTotal,
+			err: msg.err,
+		}
+		return m, nil
+
 	case actionDoneMsg:
 		m.busy, m.busyLabel = false, ""
 		m.progressPath, m.progressBytes = "", 0
 		m.noticeAt = time.Now()
+		// İşlem sonrası liste değişeceği için işaretlerin indeksleri artık
+		// güvenilir değil.
+		m.clearMarks(m.active)
 		if msg.err != nil {
 			m.notice, m.noticeErr = msg.err.Error(), true
 		} else {
@@ -365,12 +406,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if confirmed {
 			m.notice, m.noticeErr = "", false
 
-			// Kurulum canlı çıktı akıttığı için tek seferlik iş modeline
-			// girmez; doğrudan akış paneline bağlanır.
-			if act.kind == actDistroInstall {
-				logs, cmd := startInstall(act.target)
-				m.logs = logs
-				return m, cmd
+			// Kurulum ve imaj çekme terminali devralır: ilerleme çubuklarını
+			// ancak gerçek konsola bağlıyken çizerler.
+			switch act.kind {
+			case actDistroInstall:
+				return m, runInstall(act.target)
+			case actImagePull:
+				return m, runPull(act.target)
 			}
 
 			m.busy, m.busyLabel = true, act.title
@@ -382,19 +424,50 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Filtre yazarken tuşlar metne gider; aksi hâlde harfler kısayol olarak
+	// yorumlanır ve filtre yazılamaz.
+	if m.filtering {
+		switch msg.Type {
+		case tea.KeyEsc:
+			m.filter, m.filtering = "", false
+		case tea.KeyEnter:
+			m.filtering = false // filtre kalır, gezinmeye dönülür
+		case tea.KeyBackspace:
+			if m.filter != "" {
+				r := []rune(m.filter)
+				m.filter = string(r[:len(r)-1])
+			}
+		case tea.KeyRunes:
+			m.filter += string(msg.Runes)
+		case tea.KeySpace:
+			m.filter += " "
+		}
+		m.clampCursor(m.active)
+		return m, nil
+	}
+
 	if m.inspect.active {
 		switch msg.String() {
-		case "esc", "q", "I":
+		case "esc", "q", "v":
 			m.inspect = inspectModel{}
 		}
 		return m, nil
 	}
 
 	if m.menu.active {
+		kind := m.menu.kind
 		updated, choice := m.menu.update(msg)
 		m.menu = updated
 		if choice != "" {
-			return m.handleDiskChoice(choice)
+			return m.handleMenuChoice(kind, choice)
+		}
+		return m, nil
+	}
+
+	if m.system.active {
+		switch msg.String() {
+		case "esc", "q", "w":
+			m.system = systemModel{}
 		}
 		return m, nil
 	}
@@ -452,13 +525,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if act, ok := m.actionFor(msg.String()); ok {
-		m.confirm = newConfirm(act)
+		m.confirm = newConfirm(m.applyBulk(act))
 		return m, nil
 	}
 
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
+
+	case "/":
+		m.filtering = true
+		return m, nil
+
+	case " ":
+		m.toggleMark()
+		return m, nil
 
 	case "enter":
 		// Mağazada enter kurulum başlatır, diğer sekmelerde kabuk açar.
@@ -467,7 +548,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m.openShell()
 
-	case "I":
+	case "v":
 		if m.active == tabDistros {
 			if d, ok := m.selectedDistro(); ok {
 				m.busy, m.busyLabel = true, "bilgiler toplanıyor"
@@ -476,7 +557,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "D":
+	case "m":
 		if m.active == tabDistros {
 			if d, ok := m.selectedDistro(); ok {
 				m.menu = diskMenu(m.displayName(d.Name), d.IsRunning())
@@ -484,7 +565,26 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case "L":
+	case "o":
+		if m.active == tabDistros {
+			if d, ok := m.selectedDistro(); ok {
+				m.menu = openMenu(m.displayName(d.Name))
+			}
+		}
+		return m, nil
+
+	case "w":
+		m.busy, m.busyLabel = true, "sistem durumu okunuyor"
+		return m, loadSystem()
+
+	case "p":
+		// İmaj çekme ve kapsayıcı çalıştırma kapsayıcı sekmelerine ait.
+		if m.wslcOK && (m.active == tabContainers || m.active == tabImages) {
+			m.menu = containerMenu()
+		}
+		return m, nil
+
+	case "l":
 		if m.active == tabContainers && m.wslcOK {
 			c, ok := m.selectedContainer()
 			if !ok {
@@ -531,34 +631,27 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case "c":
-		return m, loadGlobalConfig()
-
-	case "C":
-		// wsl.conf distronun içindedir; okumak distroyu başlatır.
-		if m.active == tabDistros {
-			d, ok := m.selectedDistro()
-			if !ok {
-				return m, nil
-			}
-			m.busy, m.busyLabel = true, "wsl.conf okunuyor ("+d.Name+" başlatılıyor)"
-			return m, loadDistroConfig(d.Name)
-		}
+		_, hasDistro := m.selectedDistro()
+		m.menu = settingsMenu(hasDistro && m.active == tabDistros)
 		return m, nil
 
 	case "?":
 		m.showHelp = !m.showHelp
 		return m, nil
 
-	case "tab", "l", "right":
+	case "tab", "right":
 		m.active = (m.active + 1) % tabCount
+		m.filter = "" // filtre sekmeye özeldir
 		return m, m.load(m.active)
 
-	case "shift+tab", "h", "left":
+	case "shift+tab", "left":
 		m.active = (m.active - 1 + tabCount) % tabCount
+		m.filter = ""
 		return m, m.load(m.active)
 
 	case "1", "2", "3", "4", "5", "6":
 		m.active = tabID(msg.String()[0] - '1')
+		m.filter = ""
 		return m, m.load(m.active)
 
 	case "down", "j":
@@ -571,12 +664,18 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursors[m.active] = max(m.cursors[m.active]-1, 0)
 		return m, nil
 
-	case "g", "home":
+	case "home":
 		m.cursors[m.active] = 0
 		return m, nil
 
-	case "G", "end":
+	case "end":
 		m.cursors[m.active] = max(m.count(m.active)-1, 0)
+		return m, nil
+
+	case "esc":
+		// Filtreyi ve işaretleri tek tuşla temizler.
+		m.filter = ""
+		m.clearMarks(m.active)
 		return m, nil
 
 	case "r":
@@ -586,23 +685,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) count(t tabID) int {
-	switch t {
-	case tabDistros:
-		return len(m.distros)
-	case tabStore:
-		return len(m.online)
-	case tabContainers:
-		return len(m.containers)
-	case tabImages:
-		return len(m.images)
-	case tabVolumes:
-		return len(m.volumes)
-	case tabNetworks:
-		return len(m.networks)
-	}
-	return 0
-}
+// count, sekmede görünen (filtre uygulanmış) satır sayısıdır.
+func (m Model) count(t tabID) int { return len(m.visible(t)) }
 
 // clampCursor, liste kısaldığında imlecin listenin dışında kalmasını önler.
 func (m *Model) clampCursor(t tabID) {
@@ -676,6 +760,9 @@ func (m Model) viewBody(height int) string {
 	if m.menu.active {
 		return m.menu.view(m.width)
 	}
+	if m.system.active {
+		return m.system.view(m.width, height)
+	}
 	if m.logs.active {
 		return m.logs.view(m.width, height)
 	}
@@ -694,14 +781,26 @@ func (m Model) viewBody(height int) string {
 		return theme.Error.Render("Hata: " + err.Error())
 	}
 
-	cols, rows := m.tableData()
+	cols, rows, marks := m.tableData()
 	if len(rows) == 0 {
+		if m.filter != "" {
+			return theme.Empty.Render("“" + m.filter + "” ile eşleşen kayıt yok.")
+		}
 		return theme.Empty.Render(m.emptyMessage())
 	}
-	return renderTable(cols, rows, m.cursors[m.active], m.width, height)
+	return renderTable(cols, rows, m.cursors[m.active], m.width, height, marks)
 }
 
-func (m Model) tableData() ([]column, [][]string) {
+// tableData, etkin sekmenin sütunlarını, görünen satırlarını ve her satırın
+// işaretli olup olmadığını verir.
+func (m Model) tableData() ([]column, [][]string, []bool) {
+	vis := m.visible(m.active)
+
+	marks := make([]bool, 0, len(vis))
+	for _, i := range vis {
+		marks = append(marks, m.isMarked(m.active, i))
+	}
+
 	switch m.active {
 	case tabDistros:
 		cols := []column{
@@ -710,8 +809,9 @@ func (m Model) tableData() ([]column, [][]string) {
 			{title: "VERSION", width: 7},
 			{title: "DEFAULT", width: 7},
 		}
-		rows := make([][]string, 0, len(m.distros))
-		for _, d := range m.distros {
+		rows := make([][]string, 0, len(vis))
+		for _, i := range vis {
+			d := m.distros[i]
 			def := ""
 			if d.Default {
 				def = "✓"
@@ -721,7 +821,7 @@ func (m Model) tableData() ([]column, [][]string) {
 				string(d.State), d.Version, def,
 			})
 		}
-		return cols, rows
+		return cols, rows, marks
 
 	case tabStore:
 		cols := []column{
@@ -730,15 +830,16 @@ func (m Model) tableData() ([]column, [][]string) {
 			{title: "DURUM", width: 12},
 		}
 		installed := m.installedNames()
-		rows := make([][]string, 0, len(m.online))
-		for _, o := range m.online {
+		rows := make([][]string, 0, len(vis))
+		for _, i := range vis {
+			o := m.online[i]
 			state := ""
 			if installed[strings.ToLower(o.Name)] {
 				state = "kurulu"
 			}
 			rows = append(rows, []string{o.Name, o.Friendly, state})
 		}
-		return cols, rows
+		return cols, rows, marks
 
 	case tabContainers:
 		cols := []column{
@@ -748,14 +849,15 @@ func (m Model) tableData() ([]column, [][]string) {
 			{title: "STATUS", width: 20},
 			{title: "PORTS", width: 20},
 		}
-		rows := make([][]string, 0, len(m.containers))
-		for _, c := range m.containers {
+		rows := make([][]string, 0, len(vis))
+		for _, i := range vis {
+			c := m.containers[i]
 			rows = append(rows, []string{
 				c.Name(), c.Image.String(), c.State.String(),
 				c.Status.String(), c.Ports.String(),
 			})
 		}
-		return cols, rows
+		return cols, rows, marks
 
 	case tabImages:
 		cols := []column{
@@ -765,14 +867,15 @@ func (m Model) tableData() ([]column, [][]string) {
 			{title: "SIZE", width: 10},
 			{title: "CREATED", width: 20},
 		}
-		rows := make([][]string, 0, len(m.images))
-		for _, i := range m.images {
+		rows := make([][]string, 0, len(vis))
+		for _, idx := range vis {
+			i := m.images[idx]
 			rows = append(rows, []string{
 				i.Repository.String(), i.Tag.String(), i.ID.String(),
 				i.Size.String(), i.CreatedAt.String(),
 			})
 		}
-		return cols, rows
+		return cols, rows, marks
 
 	case tabVolumes:
 		cols := []column{
@@ -780,13 +883,14 @@ func (m Model) tableData() ([]column, [][]string) {
 			{title: "DRIVER", width: 12},
 			{title: "MOUNTPOINT"},
 		}
-		rows := make([][]string, 0, len(m.volumes))
-		for _, v := range m.volumes {
+		rows := make([][]string, 0, len(vis))
+		for _, i := range vis {
+			v := m.volumes[i]
 			rows = append(rows, []string{
 				v.Name.String(), v.Driver.String(), v.Mountpoint.String(),
 			})
 		}
-		return cols, rows
+		return cols, rows, marks
 
 	case tabNetworks:
 		cols := []column{
@@ -795,15 +899,16 @@ func (m Model) tableData() ([]column, [][]string) {
 			{title: "SCOPE", width: 12},
 			{title: "ID", width: 16},
 		}
-		rows := make([][]string, 0, len(m.networks))
-		for _, n := range m.networks {
+		rows := make([][]string, 0, len(vis))
+		for _, i := range vis {
+			n := m.networks[i]
 			rows = append(rows, []string{
 				n.Name.String(), n.Driver.String(), n.Scope.String(), n.ID.String(),
 			})
 		}
-		return cols, rows
+		return cols, rows, marks
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (m Model) emptyMessage() string {
@@ -878,40 +983,121 @@ func (m Model) viewHelp() string {
 				theme.HelpKey.Render("esc") + " iptal")
 	}
 
-	keys := [][2]string{
-		{"tab/1-5", "sekme"},
-		{"j/k", "gezin"},
-		{"enter", "kabuk"},
-		{"s", "başlat/durdur"},
-		{"d", "sil"},
-		{"L", "günlük"},
-		{"I", "detay"},
-		{"e", "yedekle"},
-		{"c", "ayarlar"},
-		{"q", "çık"},
-	}
+	// Tuşlar bağlama göre değişir: her sekmede yalnızca orada işe yarayanlar
+	// gösterilir, böylece satır kısa kalır.
+	keys := m.contextKeys()
+
 	if m.showHelp {
-		keys = append(keys,
-			[2]string{"g/G", "başa/sona"},
-			[2]string{"h/l", "sekme değiştir"},
-			[2]string{"u", "varsayılan yap (distro)"},
-			[2]string{"K", "sonlandır (kapsayıcı)"},
-			[2]string{"X", "WSL'i kapat"},
-			[2]string{"i", "arşivden distro oluştur"},
-			[2]string{"n", "görünen adı değiştir"},
-			[2]string{"D", "disk işlemleri"},
-			[2]string{"C", "distronun wsl.conf'u"},
-			[2]string{"t", "kaynak kullanımı"},
-			[2]string{"r", "yenile"},
-			[2]string{"?", "yardımı kapat"},
-		)
+		return m.viewHelpFull(keys)
 	}
 
-	var parts []string
+	const sep = "  ·  "
+	sepWidth := lipgloss.Width(sep)
+
+	items := make([]string, 0, len(keys))
 	for _, k := range keys {
-		parts = append(parts, theme.HelpKey.Render(k[0])+" "+k[1])
+		items = append(items, theme.HelpKey.Render(k[0])+" "+k[1])
 	}
-	return theme.Help.Render(strings.Join(parts, "  ·  "))
+
+	// theme.Help yatay dolgusu satırın iki yanına birer sütun ekler.
+	budget := m.width - 2
+
+	if all := strings.Join(items, sep); lipgloss.Width(all) <= budget {
+		return theme.Help.Render(all)
+	}
+
+	// Sığmıyorsa, tam listeye yönlendiren eke yer ayrılır.
+	tail := theme.HelpKey.Render("?") + " tümü"
+	budget -= sepWidth + lipgloss.Width(tail)
+
+	var parts []string
+	used := 0
+	for _, item := range items {
+		cost := lipgloss.Width(item)
+		if len(parts) > 0 {
+			cost += sepWidth
+		}
+		if used+cost > budget {
+			break
+		}
+		parts = append(parts, item)
+		used += cost
+	}
+
+	return theme.Help.Render(strings.Join(append(parts, tail), sep))
+}
+
+// contextKeys, etkin sekmede geçerli olan tuşları önem sırasına göre verir.
+func (m Model) contextKeys() [][2]string {
+	nav := [][2]string{
+		{"tab", "sekme"},
+		{"j/k", "gezin"},
+		{"/", "ara"},
+	}
+
+	var act [][2]string
+	switch m.active {
+	case tabDistros:
+		act = [][2]string{
+			{"s", "başlat/durdur"},
+			{"enter", "kabuk"},
+			{"v", "detay"},
+			{"o", "aç"},
+			{"e", "yedekle"},
+			{"i", "içe aktar"},
+			{"n", "yeniden adlandır"},
+			{"m", "disk"},
+			{"u", "varsayılan yap"},
+			{"d", "sil"},
+		}
+	case tabStore:
+		act = [][2]string{{"enter", "kur"}}
+	case tabContainers:
+		act = [][2]string{
+			{"s", "başlat/durdur"},
+			{"enter", "kabuk"},
+			{"l", "günlük"},
+			{"t", "kaynak"},
+			{"p", "yeni"},
+			{"x", "sonlandır"},
+			{"d", "sil"},
+		}
+	case tabImages:
+		act = [][2]string{{"p", "imaj çek"}, {"d", "sil"}}
+	default:
+		act = [][2]string{{"d", "sil"}}
+	}
+
+	common := [][2]string{
+		{"space", "işaretle"},
+		{"c", "ayarlar"},
+		{"w", "sistem"},
+		{"r", "yenile"},
+		{"q", "çık"},
+	}
+
+	return append(append(nav, act...), common...)
+}
+
+// viewHelpFull, "?" ile açılan çok satırlı tam listeyi çizer.
+func (m Model) viewHelpFull(keys [][2]string) string {
+	const perRow = 4
+
+	var b strings.Builder
+	for i, k := range keys {
+		if i > 0 && i%perRow == 0 {
+			b.WriteString("\n")
+		} else if i > 0 {
+			b.WriteString("  ·  ")
+		}
+		b.WriteString(theme.HelpKey.Render(k[0]) + " " + k[1])
+	}
+	b.WriteString("\n" + theme.HelpKey.Render("1-6") + " sekmeye git  ·  " +
+		theme.HelpKey.Render("home/end") + " başa/sona  ·  " +
+		theme.HelpKey.Render("esc") + " filtreyi ve işaretleri temizle  ·  " +
+		theme.HelpKey.Render("?") + " kapat")
+
+	return theme.Help.Render(b.String())
 }
 
 func (m Model) viewStatus() string {
@@ -930,7 +1116,21 @@ func (m Model) viewStatus() string {
 		return theme.Notice.Render("✓ " + m.notice)
 	}
 
-	parts := []string{"wsl-extended"}
+	// Filtre yazılırken durum çubuğu giriş alanına dönüşür.
+	if m.filtering {
+		return theme.StatusBar.Render("/" + m.filter + "▏")
+	}
+
+	var parts []string
+	if m.filter != "" {
+		parts = append(parts, "süzgeç: "+m.filter+" ("+itoa(m.count(m.active))+")")
+	}
+	if n := m.markCount(m.active); n > 0 {
+		parts = append(parts, itoa(n)+" işaretli")
+	}
+	if len(parts) == 0 {
+		parts = append(parts, "wsl-extended")
+	}
 
 	// Takma ad kullanılıyorsa gerçek ad görünür kalmalı: komutlar onunla çalışır.
 	if m.active == tabDistros {

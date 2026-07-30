@@ -9,8 +9,8 @@ import (
 
 // selectedOnline, mağazada seçili dağıtımı döndürür.
 func (m Model) selectedOnline() (onlineRow, bool) {
-	i := m.cursors[tabStore]
-	if i < 0 || i >= len(m.online) {
+	i, ok := m.realIndex(tabStore)
+	if !ok || i >= len(m.online) {
 		return onlineRow{}, false
 	}
 	o := m.online[i]

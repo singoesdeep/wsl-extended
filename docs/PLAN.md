@@ -228,6 +228,42 @@ Doğrulama: `Describe` gerçek makinede çalıştırıldı (GUID, kurulum dizini
 dağıtımı açıklama satırlarını eleyerek ayrıştırdı. Kurulum akışı gerçek bir
 indirmeyle denenmedi.
 
+## 5c. Üçüncü tur — kullanım geri bildirimi
+
+**Tuş haritası küçük harfe indi.** Büyük harfli kısayollar (`I`, `D`, `L`, `K`,
+`X`, `C`) kullanışsızdı. Karşılıkları: `v` detay, `m` disk, `l` günlük,
+`x` sonlandır, `o` aç. `X` (WSL kapat) ve `C` (wsl.conf) ayrı tuş olmaktan
+çıkıp `c` ayarlar menüsüne girdi. Tuş enflasyonunu menülerle çözmek, her işleve
+ayrı harf atamaktan daha sürdürülebilir.
+
+`h`/`l` ile sekme değiştirme kaldırıldı; `l` günlük paneline gerekiyordu.
+Sekme değişimi `tab`/`shift+tab` ve `1`–`6` ile yapılıyor.
+
+**Yardım satırı taşıyordu.** Artık bağlama duyarlı: her sekmede yalnızca orada
+işe yarayan tuşlar görünüyor. Satır yine sığmazsa kırpılıyor ve `?` ile tam
+listeye yönlendiriliyor. Genişlik hesabı testle korunuyor
+(`TestHelpLineFitsWidth`) — ilk denemede dolgu ve ayırıcı payını eksik
+saydığım için satır 82 sütuna taşıyordu, testi yazmasam fark etmezdim.
+
+**Kurulum ilerlemesi görünmüyordu.** Nedeni: çıktıyı boruya yönlendiriyorduk ve
+`wsl.exe` yüzde çubuğunu yalnızca gerçek bir konsola bağlıyken çiziyor. Çözüm,
+kabukta kullandığımız yöntemin aynısı: `tea.ExecProcess` ile terminali komuta
+devretmek. Akış paneli ve satır okuyucu (`streamProgress`, `scanLinesOrCR`)
+gereksiz kaldığı için silindi. Aynı yaklaşım `wslc pull` için de kullanılıyor.
+
+**Arama/süzgeç (`/`).** İmleç ve işaretler her zaman gerçek liste indeksleri
+üzerinden çalışıyor; süzgeç yalnızca hangi satırların çizileceğini belirliyor.
+Bu ayrım olmasa süzgeç değiştiğinde işlem yanlış hedefe uygulanabilirdi —
+`TestFilteredActionTargetsCorrectRow` tam bunu bekliyor.
+
+**Toplu işlem (`space`).** Yalnızca geri alınabilir işlemler toplu yapılabiliyor.
+Distro kaydını silme ve birim silme dışarıda bırakıldı: bunların koruması hedefin
+adını yazdırmaktır ve tek onayla birden çok distro silmek o korumayı yok ederdi.
+
+**Yeni yüzeyler.** `o` ile Gezgin/VS Code/yeni pencere, `w` ile sistem durumu
+(`wsl --status` ham gösteriliyor; çıktı yerelleştirilmiş olduğu için
+ayrıştırılmıyor), `p` ile imaj çekme ve kapsayıcı çalıştırma formu.
+
 ## 6. Riskler ve dikkat noktaları
 
 - **`wsl --unregister` distroyu kalıcı siler.** Yedeği yoksa geri dönüş yok.

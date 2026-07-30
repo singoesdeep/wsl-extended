@@ -16,6 +16,8 @@ const (
 	promptAlias
 	promptResize
 	promptMove
+	promptPull
+	promptRun
 )
 
 type promptField struct {

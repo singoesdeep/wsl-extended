@@ -61,7 +61,7 @@ func TestLogsRingBufferCaps(t *testing.T) {
 }
 
 func TestLogsCloseKeys(t *testing.T) {
-	for _, key := range []string{"esc", "q", "L"} {
+	for _, key := range []string{"esc", "q", "l"} {
 		m := logsWith("a")
 
 		var msg tea.KeyMsg

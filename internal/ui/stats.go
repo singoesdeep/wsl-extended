@@ -69,5 +69,5 @@ func (m statsModel) view(width, height int) string {
 	}
 
 	// İmleç -1: bu panelde seçim yok, yalnızca izleme var.
-	return head + "\n" + renderTable(cols, rows, -1, width, height-1)
+	return head + "\n" + renderTable(cols, rows, -1, width, height-1, nil)
 }

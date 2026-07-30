@@ -71,7 +71,9 @@ func resolveWidths(cols []column, total int) []int {
 
 // renderTable, başlık satırı + kaydırmalı gövde üretir. height, başlık dahil
 // toplam satır sayısıdır.
-func renderTable(cols []column, rows [][]string, cursor, width, height int) string {
+// renderTable, tabloyu çizer. marked nil değilse işaretli satırların önüne
+// toplu işlem göstergesi konur.
+func renderTable(cols []column, rows [][]string, cursor, width, height int, marked []bool) string {
 	// Satır başındaki işaretçi sütunu (2) ve yatay dolgu (2) düşülür.
 	widths := resolveWidths(cols, width-4)
 
@@ -115,6 +117,13 @@ func renderTable(cols []column, rows [][]string, cursor, width, height int) stri
 		mark := "  "
 		if selected {
 			mark = theme.Mark.Render(theme.SelectionMark) + " "
+		}
+		// Toplu işlem işareti, imleçten ayrı bir göstergedir.
+		if i < len(marked) && marked[i] {
+			mark = theme.Mark.Render("✓") + " "
+			if selected {
+				mark = theme.Mark.Render(theme.SelectionMark+"✓") + ""
+			}
 		}
 
 		b.WriteString("\n")

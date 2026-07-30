@@ -209,6 +209,50 @@ func streamLines(ctx context.Context, r io.Reader, ch chan<- string) {
 	}
 }
 
+// PullCommand, imaj indirme komutunu hazırlar. Komut çalıştırılmaz: indirme
+// ilerlemesini gösterebilmesi için terminali devralması gerekir.
+func PullCommand(image string) (*exec.Cmd, error) {
+	bin, err := binary()
+	if err != nil {
+		return nil, err
+	}
+	return exec.Command(bin, "pull", image), nil
+}
+
+// RunOptions, yeni bir kapsayıcı için verilen seçenekler. Boş alanlar komuta
+// eklenmez.
+type RunOptions struct {
+	Image   string
+	Name    string
+	Port    string // "8080:80"
+	Volume  string // "data:/veri"
+	Command string
+}
+
+// RunArgs, seçeneklerden `wslc run` argümanlarını üretir.
+func (o RunOptions) RunArgs() []string {
+	args := []string{"run", "--detach"}
+	if o.Name != "" {
+		args = append(args, "--name", o.Name)
+	}
+	if o.Port != "" {
+		args = append(args, "--publish", o.Port)
+	}
+	if o.Volume != "" {
+		args = append(args, "--volume", o.Volume)
+	}
+	args = append(args, o.Image)
+	if o.Command != "" {
+		args = append(args, strings.Fields(o.Command)...)
+	}
+	return args
+}
+
+// Run, kapsayıcıyı arka planda başlatır.
+func Run(ctx context.Context, o RunOptions) error {
+	return run(ctx, o.RunArgs()...)
+}
+
 // ShellCommand, kapsayıcıda etkileşimli bir kabuk açan komutu hazırlar.
 // Komut çalıştırılmaz; terminali devralması için çağırana verilir.
 func ShellCommand(id string) (*exec.Cmd, error) {

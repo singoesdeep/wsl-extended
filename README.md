@@ -37,30 +37,51 @@ go build -o bin/wsl-extended.exe ./cmd/wsl-extended
 
 ## Tuşlar
 
+Tüm kısayollar küçük harftir. Yardım satırı bulunduğun sekmeye göre değişir ve
+terminale sığmazsa kırpılır; `?` tam listeyi açar.
+
 | Tuş | İşlev |
 |---|---|
-| `Tab` / `Shift+Tab`, `h` / `l` | Sekme değiştir |
+| `Tab` / `Shift+Tab` | Sekme değiştir |
 | `1`–`6` | Doğrudan sekmeye git |
 | `j` / `k`, ok tuşları | Satır gezinme |
-| `g` / `G` | Listenin başı / sonu |
+| `home` / `end` | Listenin başı / sonu |
+| `/` | Ara / süz |
+| `space` | Satırı işaretle (toplu işlem) |
+| `esc` | Süzgeci ve işaretleri temizle |
 | `s` | **Başlat veya durdur** — çalışıyorsa durdurur, duruyorsa başlatır |
-| `Enter` | Kabuğa gir; Store sekmesinde kurulumu başlatır |
-| `I` | Distro detay paneli |
-| `D` | Disk işlemleri menüsü (büyüt / seyrek / taşı) |
+| `enter` | Kabuğa gir; Store sekmesinde kurulumu başlatır |
+| `v` | Distro detay paneli |
+| `o` | Şununla aç menüsü (Gezgin / VS Code / yeni pencere) |
+| `m` | Disk işlemleri menüsü (büyüt / seyrek / taşı) |
 | `n` | Görünen adı değiştir (takma ad) |
 | `e` | Distroyu dışa aktar (yedekle) |
 | `i` | Arşivden distro oluştur |
-| `c` | `.wslconfig` düzenleyicisi (tüm WSL) |
-| `C` | Seçili distronun `wsl.conf` düzenleyicisi |
-| `L` | Canlı günlük paneli (kapsayıcı) |
+| `c` | Ayarlar menüsü (`.wslconfig`, `wsl.conf`, WSL'i kapat, güncelle) |
+| `w` | Sistem durumu paneli |
+| `l` | Canlı günlük paneli (kapsayıcı) |
 | `t` | Kaynak kullanımı paneli |
-| `K` | Kapsayıcıyı sonlandır (kill) |
+| `p` | İmaj çek / kapsayıcı çalıştır |
+| `x` | Kapsayıcıyı sonlandır (kill) |
 | `u` | Distroyu varsayılan yap |
 | `d` | Sil |
-| `X` | Tüm WSL'i kapat |
 | `r` | Yenile |
-| `?` | Yardımı genişlet |
+| `?` | Tam tuş listesi |
 | `q` | Çık |
+
+## Arama ve toplu işlem
+
+`/` ile yazarak listeyi süzersin; `enter` gezinmeye döner ve süzgeç kalır, `esc`
+temizler. Süzgeç distrolarda takma adla da eşleşir. İmleç yalnızca görünen satırlar
+arasında gezinir ama işlemler her zaman gerçek kayda uygulanır.
+
+`space` ile birden çok satır işaretleyip tek seferde başlatabilir, durdurabilir ya da
+silebilirsin; onay ekranı bütün hedefleri listeler ve bir öğede hata olursa işlem
+orada durur.
+
+**Distro kaydını silme ve birim silme toplu yapılamaz.** Bu ikisinin koruması hedefin
+adını harfi harfine yazdırmaktır; tek onayla birden çok distro silmek o korumayı
+anlamsız kılardı. Onlar tek tek yapılır.
 
 ## Onay davranışı
 
@@ -86,12 +107,32 @@ bırakırsan gerçek ada döner.
 ## Store — dağıtım kurma
 
 `2` sekmesi `wsl --list --online` kataloğunu gösterir, kurulu olanlar işaretlenir.
-`Enter` seçili dağıtımı indirip kurar; ilerleme canlı akar.
+`enter` seçili dağıtımı indirip kurar.
+
+Kurulum sırasında **terminal `wsl.exe`'ye devredilir**, böylece kendi indirme yüzdesini
+çizebilir; bitince arayüz geri gelir. Çıktıyı boru hattına almak ilerleme çubuğunu
+bastırıyordu — `wsl.exe` yüzdeyi yalnızca gerçek bir konsola bağlıyken gösteriyor.
+Aynı yaklaşım `p` ile imaj çekmede de kullanılır.
 
 Kurulum `--no-launch` ile yapılır: dağıtım kurulumdan sonra otomatik açılmaz.
-Kullanıcı hesabını, ilk kez `Enter` ile kabuğa girdiğinde oluşturursun. (Bu bayrak
+Kullanıcı hesabını, ilk kez `enter` ile kabuğa girdiğinde oluşturursun. (Bu bayrak
 olmadan `wsl.exe` kurulum biter bitmez dağıtımı açıp hesap sormaya çalışır ve
 arayüzü kilitler.)
+
+## Sistem paneli ve hızlı açma
+
+`w` WSL geneli durumu gösterir: sürüm, kurulu ve çalışan distro sayısı, tüm
+distroların toplam disk kullanımı ve `wsl --status` çıktısı. Çıktı yerelleştirilmiş
+olduğu için ayrıştırılmadan olduğu gibi gösterilir.
+
+`o` seçili distroyu Windows Gezgini'nde (`\\wsl.localhost\<ad>`), VS Code'da
+(`code --remote wsl+<ad>`) ya da ayrı bir konsol penceresinde açar.
+
+## Kapsayıcı oluşturma
+
+`p` Containers ve Images sekmelerinde imaj çekme ve kapsayıcı çalıştırma menüsünü
+açar. Çalıştırma formu imaj, ad, port eşlemesi, birim ve komut alır; boş bırakılan
+alanlar komuta eklenmez ve onay ekranı çalıştırılacak tam komutu gösterir.
 
 ## Detay paneli
 

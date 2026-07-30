@@ -15,10 +15,21 @@ type menuItem struct {
 	desc  string
 }
 
+type menuKind int
+
+const (
+	menuDisk menuKind = iota
+	menuOpen
+	menuSettings
+	menuContainer
+)
+
 // menuModel, birkaç seçenek arasından seçim yaptıran küçük panodur. Her işlem
-// için ayrı tuş atamak yerine ilgili işlemleri tek yerde toplar.
+// için ayrı tuş atamak yerine ilgili işlemleri tek yerde toplar; böylece tuş
+// haritası küçük ve küçük harfli kalır.
 type menuModel struct {
 	active  bool
+	kind    menuKind
 	title   string
 	subject string
 	items   []menuItem
@@ -83,7 +94,7 @@ func diskMenu(display string, running bool) menuModel {
 	}
 
 	return menuModel{
-		active: true, title: "Disk işlemleri", subject: display,
+		active: true, kind: menuDisk, title: "Disk işlemleri", subject: display,
 		items: []menuItem{
 			{id: "resize", label: "Diski büyüt",
 				desc: "Sanal diskin üst sınırını değiştirir" + warn},
@@ -93,6 +104,54 @@ func diskMenu(display string, running bool) menuModel {
 				desc: "Disk sabit boyutta kalır"},
 			{id: "move", label: "Başka konuma taşı",
 				desc: "Distronun dosyalarını başka bir klasöre taşır" + warn},
+		},
+	}
+}
+
+// openMenu, distroyu Windows araçlarıyla açma seçenekleri.
+func openMenu(display string) menuModel {
+	return menuModel{
+		active: true, kind: menuOpen, title: "Şununla aç", subject: display,
+		items: []menuItem{
+			{id: "explorer", label: "Windows Gezgini",
+				desc: `Distronun dosya sistemini \\wsl.localhost üzerinden açar`},
+			{id: "vscode", label: "VS Code",
+				desc: "code --remote ile distroya bağlanır (VS Code kurulu olmalı)"},
+			{id: "terminal", label: "Yeni pencerede kabuk",
+				desc: "Distroyu ayrı bir konsol penceresinde açar"},
+		},
+	}
+}
+
+// settingsMenu, yapılandırma ve WSL geneli işlemler.
+func settingsMenu(hasDistro bool) menuModel {
+	items := []menuItem{
+		{id: "wslconfig", label: ".wslconfig",
+			desc: "Bellek, işlemci, takas, ağ kipi — tüm WSL2 için geçerli"},
+	}
+	if hasDistro {
+		items = append(items, menuItem{id: "wslconf", label: "Seçili distronun wsl.conf'u",
+			desc: "systemd, varsayılan kullanıcı, automount — okumak distroyu başlatır"})
+	}
+	items = append(items,
+		menuItem{id: "shutdown", label: "WSL'i kapat",
+			desc: ".wslconfig değişikliklerinin etkili olması için gerekir"},
+		menuItem{id: "update", label: "WSL'i güncelle",
+			desc: "wsl --update çalıştırır"},
+	)
+
+	return menuModel{active: true, kind: menuSettings, title: "Ayarlar", items: items}
+}
+
+// containerMenu, kapsayıcı oluşturma ve imaj çekme.
+func containerMenu() menuModel {
+	return menuModel{
+		active: true, kind: menuContainer, title: "Kapsayıcı işlemleri",
+		items: []menuItem{
+			{id: "pull", label: "İmaj çek",
+				desc: "wslc pull ile bir imaj indirir"},
+			{id: "run", label: "Kapsayıcı çalıştır",
+				desc: "İmaj, ad, port ve birim vererek yeni kapsayıcı başlatır"},
 		},
 	}
 }

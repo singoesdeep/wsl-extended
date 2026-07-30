@@ -37,14 +37,18 @@ func (m Model) installedNames() map[string]bool {
 	return set
 }
 
-// startInstall, dağıtım kurulumunu başlatır ve çıktısını canlı panele bağlar.
-func startInstall(name string) (logModel, tea.Cmd) {
-	ctx, cancel := context.WithCancel(context.Background())
+// runInstall, kurulumu terminali devrederek çalıştırır.
+//
+// Çıktıyı boruya almak yerine terminal devredilir; wsl.exe indirme yüzdesini
+// yalnızca gerçek konsola bağlıyken çizer. Bubble Tea alternatif ekranı bırakır,
+// kurulum kendi ilerleme çubuğunu gösterir ve bitince arayüz geri gelir.
+func runInstall(name string) tea.Cmd {
+	return tea.ExecProcess(wsl.InstallCommand(name), func(err error) tea.Msg {
+		return installDoneMsg{name: name, err: err}
+	})
+}
 
-	ch, err := wsl.StreamInstall(ctx, name)
-	if err != nil {
-		cancel()
-		return logModel{active: true, target: name, err: err}, nil
-	}
-	return newStreamPanel("kurulum · "+name, ch, cancel)
+type installDoneMsg struct {
+	name string
+	err  error
 }

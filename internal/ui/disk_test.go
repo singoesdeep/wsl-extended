@@ -24,7 +24,7 @@ func storeModel() Model {
 func TestStoreMarksInstalled(t *testing.T) {
 	m := storeModel()
 
-	_, rows := m.tableData()
+	_, rows, _ := m.tableData()
 	if len(rows) != 2 {
 		t.Fatalf("2 satır bekleniyordu, %d bulundu", len(rows))
 	}

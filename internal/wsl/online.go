@@ -2,9 +2,9 @@ package wsl
 
 import (
 	"bufio"
-	"bytes"
 	"context"
-	"io"
+	"os"
+	"os/exec"
 	"strings"
 )
 
@@ -76,68 +76,17 @@ func isDistroID(s string) bool {
 	return true
 }
 
-// StreamInstall, dağıtım kurulumunu başlatır ve çıktısını satır satır akıtır.
+// InstallCommand, dağıtım kurulum komutunu hazırlar. Komut çalıştırılmaz;
+// çağıran taraf terminali ona devreder.
 //
 // Kurulum `--no-launch` ile yapılır: bu bayrak olmadan wsl.exe kurulumun
-// ardından dağıtımı açıp kullanıcı hesabı sormaya çalışır ve arayüzü kilitler.
+// ardından dağıtımı açıp kullanıcı hesabı sormaya çalışır.
 //
-// Kanal, kurulum bitince ya da ctx iptal edilince kapanır.
-func StreamInstall(ctx context.Context, name string) (<-chan string, error) {
-	cmd := command(ctx, "--install", name, "--no-launch")
-
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	cmd.Stderr = cmd.Stdout
-
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-
-	ch := make(chan string, 64)
-	go func() {
-		streamProgress(ctx, stdout, ch)
-		_ = cmd.Wait()
-	}()
-	return ch, nil
-}
-
-// streamProgress, çıktıyı satır satır kanala aktarır ve işi bitince kanalı
-// kapatır.
-func streamProgress(ctx context.Context, r io.Reader, ch chan<- string) {
-	defer close(ch)
-
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	sc.Split(scanLinesOrCR)
-
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" {
-			continue
-		}
-		select {
-		case ch <- line:
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
-// scanLinesOrCR, hem \n hem \r ile biten parçaları satır kabul eder.
-//
-// wsl.exe indirme yüzdesini aynı satırda taşıma dönüşüyle günceller; yalnızca
-// \n arayan bir okuyucu, kurulum bitene kadar tek satır bile göstermez.
-func scanLinesOrCR(data []byte, atEOF bool) (int, []byte, error) {
-	if atEOF && len(data) == 0 {
-		return 0, nil, nil
-	}
-	if i := bytes.IndexAny(data, "\r\n"); i >= 0 {
-		return i + 1, data[:i], nil
-	}
-	if atEOF {
-		return len(data), data, nil
-	}
-	return 0, nil, nil
+// Terminalin devredilmesi şart: wsl.exe indirme yüzdesini yalnızca gerçek bir
+// konsola bağlıyken çizer. Çıktı bir boruya yönlendirildiğinde ilerleme
+// çubuğunu bastırır ve kullanıcı dakikalarca boş ekrana bakar.
+func InstallCommand(name string) *exec.Cmd {
+	cmd := exec.Command("wsl.exe", "--install", name, "--no-launch")
+	cmd.Env = append(os.Environ(), "WSL_UTF8=1")
+	return cmd
 }

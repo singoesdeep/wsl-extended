@@ -38,6 +38,9 @@ const (
 	actDistroResize
 	actDistroSparse
 	actDistroMove
+	actWSLUpdate
+	actImagePull
+	actContainerRun
 )
 
 // action, onaya sunulan ve onaylanınca çalıştırılacak iştir.
@@ -63,6 +66,11 @@ type action struct {
 	content    string // yapılandırma dosyasının yazılacak hâli
 	size       string // disk yeniden boyutlandırma değeri
 	sparse     bool   // seyrek disk kipi
+
+	runOpts wslc.RunOptions // yeni kapsayıcı seçenekleri
+
+	// targets boş değilse iş, listedeki her hedef için sırayla çalıştırılır.
+	targets []string
 }
 
 type actionDoneMsg struct {
@@ -71,7 +79,28 @@ type actionDoneMsg struct {
 }
 
 func (a action) run() tea.Cmd {
-	return func() tea.Msg {
+	// Toplu iş: her hedef sırayla çalıştırılır, ilk hatada durulur. Kısmen
+	// tamamlanmış bir toplu işlemi sessizce başarılı saymak yanıltıcı olurdu.
+	if len(a.targets) > 0 {
+		return func() tea.Msg {
+			for _, t := range a.targets {
+				single := a
+				single.targets, single.target = nil, t
+
+				msg := single.runOnce()
+				if msg.err != nil {
+					return actionDoneMsg{act: a, err: msg.err}
+				}
+			}
+			return actionDoneMsg{act: a}
+		}
+	}
+
+	return func() tea.Msg { return a.runOnce() }
+}
+
+func (a action) runOnce() actionDoneMsg {
+	return func() actionDoneMsg {
 		ctx, cancel := context.WithTimeout(context.Background(), actionTimeout)
 		defer cancel()
 
@@ -122,26 +151,19 @@ func (a action) run() tea.Cmd {
 			err = wslc.RemoveVolume(ctx, a.target)
 		case actNetworkRemove:
 			err = wslc.RemoveNetwork(ctx, a.target)
+		case actWSLUpdate:
+			err = wsl.Update(ctx)
+		case actContainerRun:
+			err = wslc.Run(ctx, a.runOpts)
 		}
 
 		return actionDoneMsg{act: a, err: err}
-	}
+	}()
 }
 
 // actionFor, etkin sekme ve seçili satır için basılan tuşa karşılık gelen işi
 // üretir. İkinci dönüş değeri false ise tuşun bu bağlamda karşılığı yoktur.
 func (m Model) actionFor(key string) (action, bool) {
-	// Tüm WSL'i kapatmak seçili satırdan bağımsızdır.
-	if key == "X" {
-		return action{
-			kind:  actWSLShutdown,
-			title: "WSL'i kapat",
-			body: "Tüm distrolar durdurulacak ve WSL sanal makinesi kapanacak.\n" +
-				"Çalışan işler sonlanır. Veri kaybı yok.",
-			done: "WSL kapatıldı",
-		}, true
-	}
-
 	switch m.active {
 	case tabDistros:
 		d, ok := m.selectedDistro()
@@ -208,7 +230,7 @@ func (m Model) actionFor(key string) (action, bool) {
 				body:  name + " başlatılacak.",
 				done:  name + " başlatıldı",
 			}, true
-		case "K":
+		case "x":
 			return action{
 				kind: actContainerKill, target: name, display: name,
 				title: "Kapsayıcıyı sonlandır",
@@ -281,41 +303,44 @@ func (m Model) actionFor(key string) (action, bool) {
 	return action{}, false
 }
 
+// Seçim yardımcıları filtreyi hesaba katar: imleç görünen satırlar arasında
+// gezinir, hedef ise her zaman gerçek listedeki kayıttır.
+
 func (m Model) selectedDistro() (wsl.Distro, bool) {
-	i := m.cursors[tabDistros]
-	if i < 0 || i >= len(m.distros) {
+	i, ok := m.realIndex(tabDistros)
+	if !ok || i >= len(m.distros) {
 		return wsl.Distro{}, false
 	}
 	return m.distros[i], true
 }
 
 func (m Model) selectedContainer() (wslc.Container, bool) {
-	i := m.cursors[tabContainers]
-	if i < 0 || i >= len(m.containers) {
+	i, ok := m.realIndex(tabContainers)
+	if !ok || i >= len(m.containers) {
 		return wslc.Container{}, false
 	}
 	return m.containers[i], true
 }
 
 func (m Model) selectedImage() (wslc.Image, bool) {
-	i := m.cursors[tabImages]
-	if i < 0 || i >= len(m.images) {
+	i, ok := m.realIndex(tabImages)
+	if !ok || i >= len(m.images) {
 		return wslc.Image{}, false
 	}
 	return m.images[i], true
 }
 
 func (m Model) selectedVolume() (wslc.Volume, bool) {
-	i := m.cursors[tabVolumes]
-	if i < 0 || i >= len(m.volumes) {
+	i, ok := m.realIndex(tabVolumes)
+	if !ok || i >= len(m.volumes) {
 		return wslc.Volume{}, false
 	}
 	return m.volumes[i], true
 }
 
 func (m Model) selectedNetwork() (wslc.Network, bool) {
-	i := m.cursors[tabNetworks]
-	if i < 0 || i >= len(m.networks) {
+	i, ok := m.realIndex(tabNetworks)
+	if !ok || i >= len(m.networks) {
 		return wslc.Network{}, false
 	}
 	return m.networks[i], true

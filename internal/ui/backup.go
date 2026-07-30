@@ -94,6 +94,12 @@ func (m Model) submitPrompt() (Model, tea.Cmd) {
 	values := m.prompt.values()
 
 	switch m.prompt.kind {
+	case promptPull:
+		return m.submitPull(values[0])
+
+	case promptRun:
+		return m.submitRun(values)
+
 	case promptAlias:
 		real := m.prompt.subject
 		m.data.SetAlias(real, values[0])

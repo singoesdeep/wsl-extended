@@ -237,7 +237,7 @@ func TestStartStopToggleForContainer(t *testing.T) {
 // Boş listede aksiyon tuşu hiçbir şey yapmamalı.
 func TestActionOnEmptyListIsNoop(t *testing.T) {
 	m := testModel()
-	for _, key := range []string{"s", "S", "d", "u", "K"} {
+	for _, key := range []string{"s", "d", "u", "x"} {
 		if _, ok := m.actionFor(key); ok {
 			t.Errorf("boş listede %q tuşu işlem üretti", key)
 		}

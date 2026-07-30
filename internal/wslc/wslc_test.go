@@ -125,6 +125,50 @@ func TestContainerFieldsAreCaseInsensitive(t *testing.T) {
 	}
 }
 
+// Boş bırakılan alanlar komuta eklenmemeli; boş bir --name ya da --publish
+// wslc'yi hata verdirir.
+func TestRunArgsSkipsEmptyFields(t *testing.T) {
+	args := RunOptions{Image: "alpine:latest"}.RunArgs()
+
+	joined := strings.Join(args, " ")
+	if joined != "run --detach alpine:latest" {
+		t.Errorf("args = %q", joined)
+	}
+}
+
+func TestRunArgsIncludesGivenFields(t *testing.T) {
+	args := RunOptions{
+		Image: "nginx", Name: "web", Port: "8080:80",
+		Volume: "data:/veri", Command: "sh -c echo",
+	}.RunArgs()
+
+	joined := strings.Join(args, " ")
+	for _, want := range []string{
+		"--detach", "--name web", "--publish 8080:80", "--volume data:/veri", "nginx",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("args içinde %q yok: %q", want, joined)
+		}
+	}
+
+	// İmaj, kendisine ait olmayan bayrakların arkasında kalmalı; komut imajdan
+	// sonra gelmeli.
+	imageAt := indexOf(args, "nginx")
+	cmdAt := indexOf(args, "sh")
+	if imageAt < 0 || cmdAt < 0 || cmdAt < imageAt {
+		t.Errorf("imaj ve komut sırası yanlış: %q", joined)
+	}
+}
+
+func indexOf(list []string, want string) int {
+	for i, s := range list {
+		if s == want {
+			return i
+		}
+	}
+	return -1
+}
+
 func TestContainerNameFallsBackToID(t *testing.T) {
 	c := Container{ID: "abc123"}
 	if c.Name() != "abc123" {

@@ -67,31 +67,16 @@ func TestIsDistroID(t *testing.T) {
 	}
 }
 
-// wsl.exe indirme ilerlemesini taşıma dönüşüyle günceller; yalnızca \n arayan
-// bir okuyucu kurulum bitene kadar hiçbir şey göstermez.
-func TestScanLinesOrCRSplitsOnCarriageReturn(t *testing.T) {
-	data := "İndiriliyor: 10%\rİndiriliyor: 50%\rİndiriliyor: 100%\nKuruldu\n"
+// Kurulum komutu --no-launch içermeli; olmadan wsl.exe kurulum sonrası
+// dağıtımı açıp hesap sorar.
+func TestInstallCommandUsesNoLaunch(t *testing.T) {
+	cmd := InstallCommand("Ubuntu")
 
-	var got []string
-	rest := []byte(data)
-	for len(rest) > 0 {
-		adv, tok, _ := scanLinesOrCR(rest, true)
-		if adv == 0 {
-			break
-		}
-		if len(tok) > 0 {
-			got = append(got, string(tok))
-		}
-		rest = rest[adv:]
+	joined := strings.Join(cmd.Args, " ")
+	if !strings.Contains(joined, "--install Ubuntu") {
+		t.Errorf("komut yanlış: %q", joined)
 	}
-
-	if len(got) != 4 {
-		t.Fatalf("4 parça bekleniyordu, %d bulundu: %q", len(got), got)
-	}
-	if got[0] != "İndiriliyor: 10%" {
-		t.Errorf("ilk parça = %q", got[0])
-	}
-	if got[3] != "Kuruldu" {
-		t.Errorf("son parça = %q", got[3])
+	if !strings.Contains(joined, "--no-launch") {
+		t.Errorf("--no-launch eksik: %q", joined)
 	}
 }

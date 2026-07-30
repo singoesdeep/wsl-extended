@@ -3,6 +3,7 @@ package wsl
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -125,6 +126,45 @@ func Describe(ctx context.Context, d Distro) (Info, error) {
 	}
 
 	return info, nil
+}
+
+// OpenExplorer, distronun dosya sistemini Windows Gezgini'nde açar.
+//
+// Pencere ayrı bir uygulamada açıldığı için komut beklenmez; beklenirse
+// arayüz, kullanıcı Gezgin'i kapatana kadar donardı.
+func OpenExplorer(distro string) error {
+	return exec.Command("explorer.exe", `\\wsl.localhost\`+distro).Start()
+}
+
+// OpenVSCode, distroyu VS Code'da uzak oturum olarak açar.
+func OpenVSCode(distro string) error {
+	// VS Code kurulu değilse komut bulunamaz; hata çağırana bildirilir.
+	cmd := exec.Command("code.cmd", "--remote", "wsl+"+distro, "/")
+	if _, err := exec.LookPath("code.cmd"); err != nil {
+		cmd = exec.Command("code", "--remote", "wsl+"+distro, "/")
+	}
+	return cmd.Start()
+}
+
+// OpenWindow, distroyu ayrı bir konsol penceresinde açar.
+func OpenWindow(distro string) error {
+	// cmd /c start, wsl.exe'yi yeni bir pencerede başlatır; ilk tırnak
+	// pencere başlığı olarak yorumlandığı için boş bir başlık verilir.
+	return exec.Command("cmd.exe", "/c", "start", "", "wsl.exe", "-d", distro).Start()
+}
+
+// Update, WSL paketini günceller.
+func Update(ctx context.Context) error {
+	_, err := run(ctx, "--update")
+	return err
+}
+
+// Status, `wsl --status` çıktısını ham olarak döndürür.
+//
+// Çıktı yerelleştirilmiş olduğu için ayrıştırılmaz; kullanıcıya olduğu gibi
+// gösterilir. Metne göre karar veren bir ayrıştırma dil değişince kırılırdı.
+func Status(ctx context.Context) (string, error) {
+	return run(ctx, "--status")
 }
 
 // Manage sarmalayıcıları: `wsl --manage` altındaki disk işlemleri.

@@ -112,7 +112,7 @@ func (m logModel) visibleLines(height int) []string {
 // kapatılmalıdır.
 func (m logModel) update(msg tea.KeyMsg, height int) (logModel, bool) {
 	switch msg.String() {
-	case "esc", "q", "L":
+	case "esc", "q", "l":
 		return m, true
 
 	case "down", "j":
