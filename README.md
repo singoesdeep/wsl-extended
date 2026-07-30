@@ -6,9 +6,9 @@ Sekmeli yapı: **Distros · Containers · Images · Volumes · Networks**
 
 ## Durum
 
-**Faz 1 tamam — salt okunur.** Uygulama listeleri gerçek veriyle çiziyor, sekmeler
-arasında gezinilebiliyor ve 2 saniyede bir etkin sekmeyi yeniliyor. Durum değiştiren
-komutlar (start/stop/remove) henüz yok; onay diyaloğuyla birlikte Faz 2'de gelecek.
+**Faz 2 tamam — aksiyonlar onay kapısıyla birlikte çalışıyor.** Distro başlat/durdur/
+varsayılan yap/sil, kapsayıcı başlat/durdur/sonlandır/sil, imaj-birim-ağ silme.
+Sırada Faz 3 var: canlı log akışı, `stats` ve tek tuşla shell.
 
 Yol haritası ve mimari kararlar: [docs/PLAN.md](docs/PLAN.md)
 
@@ -38,9 +38,26 @@ go build -o bin/wsl-extended.exe ./cmd/wsl-extended
 | `1`–`5` | Doğrudan sekmeye git |
 | `j` / `k`, ok tuşları | Satır gezinme |
 | `g` / `G` | Listenin başı / sonu |
+| `s` / `S` | Başlat / durdur (distro veya kapsayıcı) |
+| `K` | Kapsayıcıyı sonlandır (kill) |
+| `u` | Distroyu varsayılan yap |
+| `d` | Sil |
+| `X` | Tüm WSL'i kapat |
 | `r` | Yenile |
 | `?` | Yardımı genişlet |
 | `q` | Çık |
+
+## Onay davranışı
+
+Durum değiştiren her işlem onay ister. İki kip vardır:
+
+- **y/n** — geri alınabilir işlemler: başlat, durdur, kill, kapsayıcı/imaj/ağ silme.
+- **Adı yazma** — geri dönüşü olmayan işlemler: `wsl --unregister` ve birim silme.
+  Hedefin adı harfi harfine yazılmadan `enter` çalışmaz, ve bu kipte `y` bir onay
+  tuşu değil yazılan metnin parçasıdır.
+
+Onay açıkken tuşlar arkadaki listeye ulaşmaz ve otomatik yenileme durur; böylece
+onay beklerken imleç kayıp işlem yanlış hedefe uygulanamaz.
 
 ## Testler
 

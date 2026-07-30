@@ -65,6 +65,48 @@ var (
 		Foreground(Accent)
 )
 
+// Onay diyaloğu stilleri. Geri dönüşü olmayan işlemler kırmızı çerçeveyle
+// çizilir; renk, kipin tek göstergesi değildir — metin de farklıdır.
+var (
+	Dialog = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(Accent).
+		Padding(1, 2)
+
+	DialogDanger = lipgloss.NewStyle().
+			Border(lipgloss.DoubleBorder()).
+			BorderForeground(Danger).
+			Padding(1, 2)
+
+	DialogTitle = lipgloss.NewStyle().Bold(true).Foreground(Text)
+
+	DialogHint = lipgloss.NewStyle().Foreground(Subtle)
+
+	DialogWord = lipgloss.NewStyle().Bold(true).Foreground(Danger)
+
+	DialogInput = lipgloss.NewStyle().
+			Foreground(Text).
+			Background(lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#2A2E3B"}).
+			Padding(0, 1)
+
+	DialogInputBad = lipgloss.NewStyle().
+			Foreground(Danger).
+			Background(lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#2A2E3B"}).
+			Padding(0, 1)
+
+	DialogInputOK = lipgloss.NewStyle().
+			Foreground(Success).
+			Bold(true).
+			Background(lipgloss.AdaptiveColor{Light: "#E5E7EB", Dark: "#2A2E3B"}).
+			Padding(0, 1)
+
+	Notice = lipgloss.NewStyle().Foreground(Success).Padding(0, 1)
+
+	NoticeError = lipgloss.NewStyle().Foreground(Danger).Padding(0, 1)
+
+	Busy = lipgloss.NewStyle().Foreground(Warning).Padding(0, 1)
+)
+
 // StateStyle, bir durum metnine (Running/Stopped/…) uygun rengi verir.
 func StateStyle(state string) lipgloss.Style {
 	switch state {

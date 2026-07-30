@@ -91,6 +91,39 @@ func Version(ctx context.Context) (string, error) {
 	return "", nil
 }
 
+// Start, distroyu ayağa kaldırır. wsl.exe'de doğrudan "başlat" komutu yoktur;
+// distro, içinde bir komut çalıştırıldığında başlar. Kabuk başlatmamak için
+// --exec ile hemen çıkan bir komut kullanılır.
+func Start(ctx context.Context, name string) error {
+	_, err := run(ctx, "-d", name, "--exec", "/bin/sh", "-c", "exit 0")
+	return err
+}
+
+// Terminate, tek bir distroyu durdurur.
+func Terminate(ctx context.Context, name string) error {
+	_, err := run(ctx, "--terminate", name)
+	return err
+}
+
+// Shutdown, tüm distroları ve WSL sanal makinesini kapatır.
+func Shutdown(ctx context.Context) error {
+	_, err := run(ctx, "--shutdown")
+	return err
+}
+
+// SetDefault, varsayılan distroyu değiştirir.
+func SetDefault(ctx context.Context, name string) error {
+	_, err := run(ctx, "--set-default", name)
+	return err
+}
+
+// Unregister, distroyu kaydından düşürür ve diskteki tüm verisini siler.
+// Geri dönüşü yoktur; çağıran taraf önce açık onay almalıdır.
+func Unregister(ctx context.Context, name string) error {
+	_, err := run(ctx, "--unregister", name)
+	return err
+}
+
 func splitLines(s string) []string {
 	return strings.Split(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
 }

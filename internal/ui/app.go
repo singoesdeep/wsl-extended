@@ -89,7 +89,22 @@ type Model struct {
 
 	lastRefresh time.Time
 	showHelp    bool
+
+	// confirm açıkken tüm tuşlar diyaloga gider.
+	confirm confirmModel
+
+	// busy, bir işlem sürerken otomatik yenilemeyi durdurur; aksi hâlde liste
+	// kullanıcının altından kayar.
+	busy      bool
+	busyLabel string
+
+	notice    string
+	noticeErr bool
+	noticeAt  time.Time
 }
+
+// noticeTTL, işlem sonucu bildiriminin ekranda kalma süresi.
+const noticeTTL = 6 * time.Second
 
 // New, başlangıç modelini kurar.
 func New() Model {
@@ -170,9 +185,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKey(msg)
 
 	case tickMsg:
-		// Yalnızca görünen sekme yenilenir; arka plandaki sekmeler için
-		// sürekli süreç doğurmanın anlamı yok.
+		if !m.noticeAt.IsZero() && time.Since(m.noticeAt) > noticeTTL {
+			m.notice, m.noticeErr, m.noticeAt = "", false, time.Time{}
+		}
+		// İşlem sürerken ya da onay beklenirken liste tazelenmez: imlecin
+		// altındaki satırın değişmesi yanlış hedefe işlem yapılmasına yol açar.
+		if m.busy || m.confirm.active {
+			return m, tick()
+		}
 		return m, tea.Batch(tick(), m.load(m.active))
+
+	case actionDoneMsg:
+		m.busy, m.busyLabel = false, ""
+		m.noticeAt = time.Now()
+		if msg.err != nil {
+			m.notice, m.noticeErr = msg.err.Error(), true
+		} else {
+			m.notice, m.noticeErr = msg.act.done, false
+		}
+		// İşlem sonrası liste hemen tazelenir ki sonuç görünsün.
+		return m, m.load(m.active)
 
 	case versionMsg:
 		m.wslVersion = string(msg)
@@ -213,6 +245,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	// Onay diyaloğu açıkken hiçbir tuş arka plandaki listeye ulaşmaz.
+	if m.confirm.active {
+		act := m.confirm.act
+		updated, confirmed := m.confirm.update(msg)
+		m.confirm = updated
+		if confirmed {
+			m.busy, m.busyLabel = true, act.title
+			m.notice, m.noticeErr = "", false
+			return m, act.run()
+		}
+		return m, nil
+	}
+
+	// Bir işlem sürerken yeni işlem başlatılmaz; gezinme serbest kalır.
+	if m.busy {
+		switch msg.String() {
+		case "q", "ctrl+c":
+			return m, tea.Quit
+		case "up", "k", "down", "j":
+			// gezinmeye izin ver
+		default:
+			return m, nil
+		}
+	}
+
+	if act, ok := m.actionFor(msg.String()); ok {
+		m.confirm = newConfirm(act)
+		return m, nil
+	}
+
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
@@ -321,6 +383,11 @@ func (m Model) viewHeader() string {
 }
 
 func (m Model) viewBody(height int) string {
+	// Onay diyaloğu listenin yerine geçer: arka planda hedefin değiştiğini
+	// düşündürecek bir görüntü kalmaz.
+	if m.confirm.active {
+		return m.confirm.view(m.width)
+	}
 	if m.active == tabDistros && !m.wslOK {
 		return theme.Error.Render("wsl.exe bulunamadı. WSL kurulu mu?")
 	}
@@ -442,9 +509,22 @@ func (m Model) emptyMessage() string {
 }
 
 func (m Model) viewHelp() string {
+	if m.confirm.active {
+		if m.confirm.requiresTyping() {
+			return theme.Help.Render(
+				theme.HelpKey.Render("adı yaz") + " onayla  ·  " +
+					theme.HelpKey.Render("esc") + " iptal")
+		}
+		return theme.Help.Render(
+			theme.HelpKey.Render("y") + " onayla  ·  " +
+				theme.HelpKey.Render("n/esc") + " iptal")
+	}
+
 	keys := [][2]string{
 		{"tab/1-5", "sekme"},
 		{"j/k", "gezin"},
+		{"s/S", "başlat/durdur"},
+		{"d", "sil"},
 		{"r", "yenile"},
 		{"?", "yardım"},
 		{"q", "çık"},
@@ -453,6 +533,9 @@ func (m Model) viewHelp() string {
 		keys = append(keys,
 			[2]string{"g/G", "başa/sona"},
 			[2]string{"h/l", "sekme değiştir"},
+			[2]string{"u", "varsayılan yap (distro)"},
+			[2]string{"K", "sonlandır (kapsayıcı)"},
+			[2]string{"X", "WSL'i kapat"},
 		)
 	}
 
@@ -464,6 +547,17 @@ func (m Model) viewHelp() string {
 }
 
 func (m Model) viewStatus() string {
+	// İşlem durumu ve sonucu, sabit bilgilerin önüne geçer.
+	if m.busy {
+		return theme.Busy.Render("⟳ " + m.busyLabel + "…")
+	}
+	if m.notice != "" {
+		if m.noticeErr {
+			return theme.NoticeError.Render("✗ " + m.notice)
+		}
+		return theme.Notice.Render("✓ " + m.notice)
+	}
+
 	parts := []string{"wsl-extended"}
 	if m.wslVersion != "" {
 		parts = append(parts, "WSL "+m.wslVersion)
@@ -474,7 +568,6 @@ func (m Model) viewStatus() string {
 	if !m.lastRefresh.IsZero() {
 		parts = append(parts, "yenilendi "+m.lastRefresh.Format("15:04:05"))
 	}
-	parts = append(parts, "salt okunur (Faz 1)")
 
 	return theme.StatusBar.Render(strings.Join(parts, "  ·  "))
 }

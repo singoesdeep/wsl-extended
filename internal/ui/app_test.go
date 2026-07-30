@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/singoesdeep/wsl-extended/internal/wsl"
 	"github.com/singoesdeep/wsl-extended/internal/wslc"
 )
+
+var errTest = errors.New("komut patladı")
 
 func testModel() Model {
 	m := New()
@@ -93,6 +96,77 @@ func TestTabNavigationWraps(t *testing.T) {
 
 	if m.active != tabNetworks {
 		t.Errorf("aktif sekme = %v; ilk sekmeden geriye gidince sona sarmalıydı", m.active)
+	}
+}
+
+// Onay diyaloğu açıkken tuşlar arkadaki listeye sızmamalı; aksi hâlde onay
+// beklerken imleç kayar ve işlem yanlış hedefe uygulanır.
+func TestKeysDoNotLeakThroughConfirm(t *testing.T) {
+	m := testModel()
+	m.distros = []wsl.Distro{{Name: "alpha"}, {Name: "beta"}}
+
+	updated, _ := m.handleKey(runes("d"))
+	m = updated.(Model)
+	if !m.confirm.active {
+		t.Fatal("d tuşu onay diyaloğunu açmadı")
+	}
+
+	before := m.cursors[tabDistros]
+	updated, _ = m.handleKey(runes("j"))
+	m = updated.(Model)
+
+	if m.cursors[tabDistros] != before {
+		t.Error("onay açıkken imleç hareket etti")
+	}
+	if !m.confirm.active {
+		t.Error("j tuşu diyalogu kapattı")
+	}
+}
+
+// Bir işlem sürerken yeni bir işlem başlatılamamalı.
+func TestNoNewActionWhileBusy(t *testing.T) {
+	m := testModel()
+	m.distros = []wsl.Distro{{Name: "alpha"}}
+	m.busy = true
+
+	updated, _ := m.handleKey(runes("d"))
+	m = updated.(Model)
+
+	if m.confirm.active {
+		t.Error("işlem sürerken yeni onay diyaloğu açıldı")
+	}
+}
+
+func TestActionFailureShowsError(t *testing.T) {
+	m := testModel()
+	m.busy = true
+
+	updated, _ := m.Update(actionDoneMsg{
+		act: action{done: "silindi"},
+		err: errTest,
+	})
+	m = updated.(Model)
+
+	if m.busy {
+		t.Error("işlem bitti ama busy true kaldı")
+	}
+	if !m.noticeErr || !strings.Contains(m.notice, "patladı") {
+		t.Errorf("hata bildirimi bekleniyordu: %q", m.notice)
+	}
+}
+
+func TestActionSuccessShowsNotice(t *testing.T) {
+	m := testModel()
+	m.busy = true
+
+	updated, _ := m.Update(actionDoneMsg{act: action{done: "alpha silindi"}})
+	m = updated.(Model)
+
+	if m.noticeErr {
+		t.Error("başarılı işlem hata olarak işaretlendi")
+	}
+	if m.notice != "alpha silindi" {
+		t.Errorf("bildirim = %q", m.notice)
 	}
 }
 

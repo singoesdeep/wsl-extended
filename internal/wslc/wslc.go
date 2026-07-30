@@ -133,6 +133,54 @@ type Network struct {
 	Scope  Text `json:"Scope"`
 }
 
+// run, çıktısı önemsenmeyen durum değiştiren komutları çalıştırır.
+func run(ctx context.Context, args ...string) error {
+	bin, err := binary()
+	if err != nil {
+		return err
+	}
+
+	if _, err := exec.CommandContext(ctx, bin, args...).Output(); err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+			return fmt.Errorf("wslc %s: %s", strings.Join(args, " "),
+				strings.TrimSpace(string(ee.Stderr)))
+		}
+		return fmt.Errorf("wslc %s: %w", strings.Join(args, " "), err)
+	}
+	return nil
+}
+
+func StartContainer(ctx context.Context, id string) error {
+	return run(ctx, "start", id)
+}
+
+func StopContainer(ctx context.Context, id string) error {
+	return run(ctx, "stop", id)
+}
+
+// KillContainer, kapsayıcıyı beklemeden sonlandırır.
+func KillContainer(ctx context.Context, id string) error {
+	return run(ctx, "kill", id)
+}
+
+func RemoveContainer(ctx context.Context, id string) error {
+	return run(ctx, "remove", id)
+}
+
+func RemoveImage(ctx context.Context, id string) error {
+	return run(ctx, "rmi", id)
+}
+
+// RemoveVolume, birimi ve içindeki veriyi siler. Geri dönüşü yoktur.
+func RemoveVolume(ctx context.Context, name string) error {
+	return run(ctx, "volume", "remove", name)
+}
+
+func RemoveNetwork(ctx context.Context, name string) error {
+	return run(ctx, "network", "remove", name)
+}
+
 func Containers(ctx context.Context) ([]Container, error) {
 	var cs []Container
 	err := runJSON(ctx, &cs, "list", "--all", "--format", "json")

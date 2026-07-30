@@ -96,13 +96,26 @@ Bir işlem çalışırken poll duraklatılır ki liste altından kaymasın.
 
 ## 5. Fazlar
 
-**Faz 1 — İskelet ve okuma**
+> Durum: Faz 1 ve Faz 2 tamamlandı.
+
+**Faz 1 — İskelet ve okuma** ✅
 Sekme çatısı, distro listesi (`wsl -l -v`), kapsayıcı/imaj listesi (JSON), durum çubuğu, tema.
 Hiçbir yazma işlemi yok. Bu faz sonunda uygulama gerçek veriyle çalışır hâlde.
 
-**Faz 2 — Temel aksiyonlar**
+**Faz 2 — Temel aksiyonlar** ✅
 start/stop/terminate, container start/stop/kill/remove, onay diyaloğu bileşeni.
-Ad yazdırma modu burada devreye girer.
+Ad yazdırma modu burada devreye girdi.
+
+Uygulamada eklenen iki güvenlik kuralı:
+- Onay açıkken tuşlar arkadaki listeye sızmaz ve otomatik yenileme durur.
+  Aksi hâlde onay beklenirken liste tazelenip imleç kayar ve işlem yanlış
+  hedefe uygulanabilirdi.
+- Ad yazdırma kipinde `y` onay tuşu değildir; yazılan metnin parçasıdır.
+  Böylece "y'ye basma" refleksi geri dönüşü olmayan bir işlemi tetikleyemez.
+
+`wsl.exe`'de doğrudan "başlat" komutu olmadığından `Start`, distroda hemen çıkan
+bir komut çalıştırır: `wsl -d <ad> --exec /bin/sh -c "exit 0"`. Gerçek distroda
+doğrulandı (bkz. `lifecycle_integration_test.go`).
 
 **Faz 3 — Öldürücü özellikler**
 Canlı log akışı, `stats` tablosu, `Enter` ile shell'e düşüp geri dönme
