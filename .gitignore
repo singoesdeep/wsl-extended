@@ -1,0 +1,27 @@
+# Derlenmiş ikili dosyalar
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/bin/
+/dist/
+
+# Test ve profil çıktıları
+*.test
+*.out
+coverage.*
+
+# Distro yedekleri (çok büyük olabilir)
+*.tar
+*.vhdx
+
+# Editör / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+.DS_Store
+
+# Yerel yapılandırma
+config.local.yaml
