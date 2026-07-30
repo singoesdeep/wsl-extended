@@ -99,6 +99,14 @@ func Start(ctx context.Context, name string) error {
 	return err
 }
 
+// ShellCommand, distroda etkileşimli bir kabuk açan komutu hazırlar. Komut
+// çalıştırılmaz; terminali devralması için çağırana verilir.
+func ShellCommand(name string) *exec.Cmd {
+	cmd := exec.Command("wsl.exe", "-d", name)
+	cmd.Env = append(os.Environ(), "WSL_UTF8=1")
+	return cmd
+}
+
 // Terminate, tek bir distroyu durdurur.
 func Terminate(ctx context.Context, name string) error {
 	_, err := run(ctx, "--terminate", name)

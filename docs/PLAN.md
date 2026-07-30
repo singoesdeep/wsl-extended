@@ -117,9 +117,24 @@ Uygulamada eklenen iki güvenlik kuralı:
 bir komut çalıştırır: `wsl -d <ad> --exec /bin/sh -c "exit 0"`. Gerçek distroda
 doğrulandı (bkz. `lifecycle_integration_test.go`).
 
-**Faz 3 — Öldürücü özellikler**
+**Faz 3 — Öldürücü özellikler** ✅
 Canlı log akışı, `stats` tablosu, `Enter` ile shell'e düşüp geri dönme
 (`tea.ExecProcess` ile — terminal kontrolü devredilir, çıkınca TUI restore edilir).
+
+Uygulamada netleşenler:
+- `wslc stats` Docker'ın aksine **akış yapmaz**, anlık görüntü döndürür ve
+  `--format json` destekler. Bu yüzden panel açıkken düzenli aralıkla yeniden
+  çağrılıyor; ayrı bir akış yönetimine gerek kalmadı.
+- Günlük akışında kapsayıcının stderr çıktısı da stdout'a katılıyor; aksi hâlde
+  stderr'e yazan uygulamaların günlüklerinin yarısı görünmezdi.
+- Akış kanalı `ctx` iptalinde kapanıyor. Panel kapatılırken `cancel()`
+  çağrılmazsa hem wslc süreci hem de okuyan goroutine arkada kalırdı;
+  `TestStreamLinesStopsOnCancel` tam olarak bunu bekliyor.
+- Günlükler 2000 satırlık halka tamponda tutuluyor, uzun açık kalan panel
+  belleği şişirmiyor.
+
+Doğrulama boşluğu: bu makinede hiç kapsayıcı olmadığı için `logs -f` ve
+`exec -it` gerçek veriyle denenemedi.
 
 **Faz 4 — Distro yedekleme**
 export/import/klonla, ilerleme göstergesi, hedef yol seçici.

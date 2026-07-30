@@ -93,6 +93,9 @@ type Model struct {
 	// confirm açıkken tüm tuşlar diyaloga gider.
 	confirm confirmModel
 
+	logs  logModel
+	stats statsModel
+
 	// busy, bir işlem sürerken otomatik yenilemeyi durdurur; aksi hâlde liste
 	// kullanıcının altından kayar.
 	busy      bool
@@ -193,7 +196,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.busy || m.confirm.active {
 			return m, tick()
 		}
+		// Günlük paneli kendi akışından beslenir; liste yenilemeye gerek yok.
+		if m.logs.active {
+			return m, tick()
+		}
+		if m.stats.active {
+			return m, tea.Batch(tick(), loadStats())
+		}
 		return m, tea.Batch(tick(), m.load(m.active))
+
+	case logLineMsg:
+		// Panel kapandıysa geciken satırlar yok sayılır.
+		if !m.logs.active {
+			return m, nil
+		}
+		m.logs = m.logs.append(string(msg))
+		return m, waitForLine(m.logs.ch)
+
+	case logClosedMsg:
+		if m.logs.active {
+			m.logs = m.logs.append("— akış sona erdi —")
+			m.logs.ch = nil
+		}
+		return m, nil
+
+	case logErrMsg:
+		m.logs.err = msg.err
+		return m, nil
+
+	case statsMsg:
+		m.stats.items, m.stats.err = msg.items, msg.err
+		return m, nil
+
+	case shellDoneMsg:
+		if msg.err != nil {
+			m.notice, m.noticeErr, m.noticeAt = msg.err.Error(), true, time.Now()
+		}
+		// Kabuktan dönerken ekran kirlenmiş olabilir; liste hemen tazelenir.
+		return m, m.load(m.active)
 
 	case actionDoneMsg:
 		m.busy, m.busyLabel = false, ""
@@ -258,6 +298,24 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Günlük paneli açıkken tuşlar panele aittir.
+	if m.logs.active {
+		updated, closed := m.logs.update(msg, m.bodyHeight())
+		m.logs = updated
+		if closed {
+			m.logs = m.logs.close()
+		}
+		return m, nil
+	}
+
+	if m.stats.active {
+		switch msg.String() {
+		case "esc", "q", "t":
+			m.stats = statsModel{}
+		}
+		return m, nil
+	}
+
 	// Bir işlem sürerken yeni işlem başlatılmaz; gezinme serbest kalır.
 	if m.busy {
 		switch msg.String() {
@@ -278,6 +336,28 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "q", "ctrl+c":
 		return m, tea.Quit
+
+	case "enter":
+		return m.openShell()
+
+	case "L":
+		if m.active == tabContainers && m.wslcOK {
+			c, ok := m.selectedContainer()
+			if !ok {
+				return m, nil
+			}
+			logs, cmd := startLogs(c.Name())
+			m.logs = logs
+			return m, cmd
+		}
+		return m, nil
+
+	case "t":
+		if m.wslcOK {
+			m.stats = statsModel{active: true}
+			return m, loadStats()
+		}
+		return m, nil
 
 	case "?":
 		m.showHelp = !m.showHelp
@@ -382,11 +462,21 @@ func (m Model) viewHeader() string {
 	return theme.TabBar.Render(lipgloss.JoinHorizontal(lipgloss.Top, tabs...))
 }
 
+// bodyHeight, gövdeye ayrılan yaklaşık satır sayısı. Sayfa kaydırma miktarı
+// gibi tuş işlemlerinde kullanılır; kesin çizim hesabı View içindedir.
+func (m Model) bodyHeight() int { return max(3, m.height-6) }
+
 func (m Model) viewBody(height int) string {
 	// Onay diyaloğu listenin yerine geçer: arka planda hedefin değiştiğini
 	// düşündürecek bir görüntü kalmaz.
 	if m.confirm.active {
 		return m.confirm.view(m.width)
+	}
+	if m.logs.active {
+		return m.logs.view(m.width, height)
+	}
+	if m.stats.active {
+		return m.stats.view(m.width, height)
 	}
 	if m.active == tabDistros && !m.wslOK {
 		return theme.Error.Render("wsl.exe bulunamadı. WSL kurulu mu?")
@@ -520,13 +610,24 @@ func (m Model) viewHelp() string {
 				theme.HelpKey.Render("n/esc") + " iptal")
 	}
 
+	if m.logs.active {
+		return theme.Help.Render(
+			theme.HelpKey.Render("j/k") + " kaydır  ·  " +
+				theme.HelpKey.Render("G") + " takibe dön  ·  " +
+				theme.HelpKey.Render("esc") + " kapat")
+	}
+	if m.stats.active {
+		return theme.Help.Render(theme.HelpKey.Render("esc") + " kapat")
+	}
+
 	keys := [][2]string{
 		{"tab/1-5", "sekme"},
 		{"j/k", "gezin"},
+		{"enter", "kabuk"},
 		{"s/S", "başlat/durdur"},
 		{"d", "sil"},
-		{"r", "yenile"},
-		{"?", "yardım"},
+		{"L", "günlük"},
+		{"t", "kaynak"},
 		{"q", "çık"},
 	}
 	if m.showHelp {
@@ -536,6 +637,8 @@ func (m Model) viewHelp() string {
 			[2]string{"u", "varsayılan yap (distro)"},
 			[2]string{"K", "sonlandır (kapsayıcı)"},
 			[2]string{"X", "WSL'i kapat"},
+			[2]string{"r", "yenile"},
+			[2]string{"?", "yardımı kapat"},
 		)
 	}
 

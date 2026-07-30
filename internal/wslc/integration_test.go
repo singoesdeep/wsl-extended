@@ -55,4 +55,13 @@ func TestListingsAgainstRealWSLC(t *testing.T) {
 		}
 		t.Logf("%d ağ: %+v", len(ns), ns)
 	})
+
+	// stats akış yapmaz; her çağrı tek bir anlık görüntü döndürür.
+	t.Run("stats", func(t *testing.T) {
+		ss, err := Stats(ctx(t))
+		if err != nil {
+			t.Fatalf("Stats: %v", err)
+		}
+		t.Logf("%d istatistik kaydı: %+v", len(ss), ss)
+	})
 }

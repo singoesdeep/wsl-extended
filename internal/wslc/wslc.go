@@ -7,11 +7,14 @@
 package wslc
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -131,6 +134,89 @@ type Network struct {
 	Name   Text `json:"Name"`
 	Driver Text `json:"Driver"`
 	Scope  Text `json:"Scope"`
+}
+
+// Stat, tek bir kapsayıcının kaynak kullanımı anlık görüntüsüdür.
+//
+// `wslc stats` Docker'ın aksine akış yapmaz; her çağrı tek bir görüntü döndürür,
+// bu yüzden arayüz tarafında düzenli aralıkla yeniden çağrılır.
+type Stat struct {
+	ID       Text `json:"ID"`
+	Name     Text `json:"Name"`
+	CPUPerc  Text `json:"CPUPerc"`
+	MemUsage Text `json:"MemUsage"`
+	MemPerc  Text `json:"MemPerc"`
+	NetIO    Text `json:"NetIO"`
+	BlockIO  Text `json:"BlockIO"`
+	PIDs     Text `json:"PIDs"`
+}
+
+func Stats(ctx context.Context) ([]Stat, error) {
+	var ss []Stat
+	err := runJSON(ctx, &ss, "stats", "--all", "--format", "json")
+	return ss, err
+}
+
+// StreamLogs, kapsayıcının günlüklerini takip eden bir satır kanalı döndürür.
+//
+// Kanal, ctx iptal edildiğinde ya da komut sona erdiğinde kapanır. Çağıran
+// taraf kanalı sonuna kadar tüketmeli ya da ctx'i iptal etmelidir; aksi hâlde
+// okuyan goroutine sızar.
+func StreamLogs(ctx context.Context, id string, tail int) (<-chan string, error) {
+	bin, err := binary()
+	if err != nil {
+		return nil, err
+	}
+
+	args := []string{"logs", "--follow", "--tail", strconv.Itoa(tail), id}
+	cmd := exec.CommandContext(ctx, bin, args...)
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, err
+	}
+	// Kapsayıcılar günlüklerini sıklıkla stderr'e yazar; ikisi de aynı akışa
+	// katılmazsa günlüklerin yarısı kaybolur.
+	cmd.Stderr = cmd.Stdout
+
+	if err := cmd.Start(); err != nil {
+		return nil, err
+	}
+
+	ch := make(chan string, 256)
+	go func() {
+		streamLines(ctx, stdout, ch)
+		_ = cmd.Wait()
+	}()
+	return ch, nil
+}
+
+// streamLines, r'deki satırları ch'ye aktarır ve işi bitince ch'yi kapatır.
+// ctx iptal edilirse yazmayı bırakır, böylece kimse okumadığında bloke olmaz.
+func streamLines(ctx context.Context, r io.Reader, ch chan<- string) {
+	defer close(ch)
+
+	sc := bufio.NewScanner(r)
+	// Varsayılan 64 KiB sınırı uzun günlük satırlarında taşar.
+	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	for sc.Scan() {
+		select {
+		case ch <- sc.Text():
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// ShellCommand, kapsayıcıda etkileşimli bir kabuk açan komutu hazırlar.
+// Komut çalıştırılmaz; terminali devralması için çağırana verilir.
+func ShellCommand(id string) (*exec.Cmd, error) {
+	bin, err := binary()
+	if err != nil {
+		return nil, err
+	}
+	return exec.Command(bin, "exec", "-i", "-t", id, "/bin/sh"), nil
 }
 
 // run, çıktısı önemsenmeyen durum değiştiren komutları çalıştırır.
