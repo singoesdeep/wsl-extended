@@ -1,38 +1,57 @@
 # wsl-extended
 
-WSL distrolarını ve `wslc` kapsayıcılarını tek bir terminal arayüzünden yönetmek için Go ile yazılmış TUI.
+WSL distrolarını ve `wslc` kapsayıcılarını tek bir terminal arayüzünden yöneten,
+Go ile yazılmış bir TUI.
 
-Sekmeli yapı: **Distros · Store · Containers · Images · Volumes · Networks**
+![Go](https://img.shields.io/badge/Go-1.26+-00ADD8?logo=go&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-Windows-0078D6?logo=windows&logoColor=white)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-## Durum
+```
+   1 Distros (3)    2 Store    3 Containers    4 Images    5 Volumes    6 Networks
+────────────────────────────────────────────────────────────────────────────────────
+   NAME                                        STATE         VERSION  DEFAULT
+ ▍● FedoraLinux-44                             Running       2        ✓
+   ○ openSUSE-Tumbleweed                       Stopped       2
+   ○ kali-linux                                Stopped       2
 
-**Planlanan beş fazın tamamı bitti.** Listeler, aksiyonlar (onay kapısıyla), canlı
-günlük akışı, kaynak kullanımı paneli, tek tuşla kabuk, distro yedekleme
-(export/import) ve yapılandırma düzenleyicisi.
+ tab sekme  ·  j/k gezin  ·  / ara  ·  s başlat/durdur  ·  enter kabuk  ·  ? tümü
+ wsl-extended  ·  WSL 2.9.4.0
+```
 
-Günlük ve kabuk özellikleri gerçek bir kapsayıcıyla **henüz denenmedi** — bu makinede
-hiç kapsayıcı yok. Komut sözdizimleri `wslc --help` çıktısına göre yazıldı ve akış
-mantığı testlerle doğrulandı, ama ilk kapsayıcını oluşturduğunda bu iki özelliği
-gözden geçirmek gerekir.
+## Ne yapar
 
-Yol haritası ve mimari kararlar: [docs/PLAN.md](docs/PLAN.md)
+`wsl.exe` ve `wslc.exe` komutlarını ezberlemeden WSL'i yönetmeni sağlar:
+
+- **Distroları** başlat, durdur, sil, varsayılan yap, kabuğa gir
+- **Yedekle ve geri yükle** — tek tuşla arşive aktar, arşivden yeni distro oluştur
+- **Yeni dağıtım kur** — `wsl --list --online` kataloğundan seç, indir
+- **Yapılandırmayı düzenle** — `.wslconfig` ve `wsl.conf` için form, kaydetmeden önce fark göster
+- **Diski yönet** — büyüt, seyrek disk aç/kapat, başka konuma taşı
+- **Kapsayıcıları yönet** — liste, canlı günlük, kaynak kullanımı, kabuk, imaj çekme
+- **Ara ve toplu işlem yap** — `/` ile süz, `space` ile işaretle
 
 ## Gereksinimler
 
-- Go 1.26+
+- Windows 10/11
+- Go 1.26 veya üstü (derlemek için)
 - WSL 2.9+ (`wsl.exe`)
-- `wslc.exe` — kapsayıcı sekmeleri için. Yoksa uygulama çalışır, o sekmeler bilgi ekranı gösterir.
+- `wslc.exe` — yalnızca kapsayıcı sekmeleri için. Yoksa uygulama çalışır, o sekmeler bilgi ekranı gösterir.
 
-## Çalıştırma
+## Kurulum
+
+```bash
+git clone https://github.com/singoesdeep/wsl-extended.git
+```
+
+```bash
+cd wsl-extended && go build -o bin/wsl-extended.exe ./cmd/wsl-extended
+```
+
+Ya da doğrudan çalıştır:
 
 ```bash
 go run ./cmd/wsl-extended
-```
-
-Derlemek için:
-
-```bash
-go build -o bin/wsl-extended.exe ./cmd/wsl-extended
 ```
 
 ## Tuşlar
@@ -42,164 +61,111 @@ terminale sığmazsa kırpılır; `?` tam listeyi açar.
 
 | Tuş | İşlev |
 |---|---|
-| `Tab` / `Shift+Tab` | Sekme değiştir |
+| `tab` / `shift+tab` | Sekme değiştir |
 | `1`–`6` | Doğrudan sekmeye git |
 | `j` / `k`, ok tuşları | Satır gezinme |
 | `home` / `end` | Listenin başı / sonu |
 | `/` | Ara / süz |
 | `space` | Satırı işaretle (toplu işlem) |
 | `esc` | Süzgeci ve işaretleri temizle |
-| `s` | **Başlat veya durdur** — çalışıyorsa durdurur, duruyorsa başlatır |
+| `s` | Başlat veya durdur — duruma göre |
 | `enter` | Kabuğa gir; Store sekmesinde kurulumu başlatır |
 | `v` | Distro detay paneli |
-| `o` | Şununla aç menüsü (Gezgin / VS Code / yeni pencere) |
-| `m` | Disk işlemleri menüsü (büyüt / seyrek / taşı) |
-| `n` | Görünen adı değiştir (takma ad) |
-| `e` | Distroyu dışa aktar (yedekle) |
+| `o` | Şununla aç (Gezgin / VS Code / yeni pencere) |
+| `m` | Disk işlemleri (büyüt / seyrek / taşı) |
+| `n` | Görünen adı değiştir |
+| `e` | Dışa aktar (yedekle) |
 | `i` | Arşivden distro oluştur |
-| `c` | Ayarlar menüsü (`.wslconfig`, `wsl.conf`, WSL'i kapat, güncelle) |
-| `w` | Sistem durumu paneli |
-| `l` | Canlı günlük paneli (kapsayıcı) |
-| `t` | Kaynak kullanımı paneli |
+| `c` | Ayarlar (`.wslconfig`, `wsl.conf`, WSL'i kapat, güncelle) |
+| `w` | Sistem durumu |
+| `l` | Canlı günlük (kapsayıcı) |
+| `t` | Kaynak kullanımı |
 | `p` | İmaj çek / kapsayıcı çalıştır |
-| `x` | Kapsayıcıyı sonlandır (kill) |
-| `u` | Distroyu varsayılan yap |
+| `x` | Kapsayıcıyı sonlandır |
+| `u` | Varsayılan distro yap |
 | `d` | Sil |
 | `r` | Yenile |
-| `?` | Tam tuş listesi |
 | `q` | Çık |
 
-## Arama ve toplu işlem
+## Güvenlik yaklaşımı
 
-`/` ile yazarak listeyi süzersin; `enter` gezinmeye döner ve süzgeç kalır, `esc`
-temizler. Süzgeç distrolarda takma adla da eşleşir. İmleç yalnızca görünen satırlar
-arasında gezinir ama işlemler her zaman gerçek kayda uygulanır.
-
-`space` ile birden çok satır işaretleyip tek seferde başlatabilir, durdurabilir ya da
-silebilirsin; onay ekranı bütün hedefleri listeler ve bir öğede hata olursa işlem
-orada durur.
-
-**Distro kaydını silme ve birim silme toplu yapılamaz.** Bu ikisinin koruması hedefin
-adını harfi harfine yazdırmaktır; tek onayla birden çok distro silmek o korumayı
-anlamsız kılardı. Onlar tek tek yapılır.
-
-## Onay davranışı
-
-Durum değiştiren her işlem onay ister. İki kip vardır:
+Durum değiştiren her işlem onaydan geçer ve iki kip vardır:
 
 - **y/n** — geri alınabilir işlemler: başlat, durdur, kill, kapsayıcı/imaj/ağ silme.
-- **Adı yazma** — geri dönüşü olmayan işlemler: `wsl --unregister` ve birim silme.
-  Hedefin adı harfi harfine yazılmadan `enter` çalışmaz, ve bu kipte `y` bir onay
-  tuşu değil yazılan metnin parçasıdır.
+- **Adı yazma** — geri dönüşü olmayanlar: `wsl --unregister` ve birim silme. Hedefin
+  adı harfi harfine yazılmadan `enter` çalışmaz, ve bu kipte `y` bir onay tuşu değil,
+  yazılan metnin parçasıdır.
 
-Onay açıkken tuşlar arkadaki listeye ulaşmaz ve otomatik yenileme durur; böylece
-onay beklerken imleç kayıp işlem yanlış hedefe uygulanamaz.
+Onay açıkken tuşlar arkadaki listeye ulaşmaz ve otomatik yenileme durur; böylece onay
+beklerken imleç kayıp işlem yanlış hedefe uygulanamaz.
 
-## Görünen ad (takma ad)
+**Distro ve birim silme toplu yapılamaz.** Bu ikisinin koruması adı yazdırmaktır ve tek
+onayla birden çok distro silmek o korumayı anlamsız kılardı.
 
-`n` ile bir distroya istediğin adı verebilirsin. **WSL'de yeniden adlandırma
-komutu yoktur**; registry'deki `DistributionName` değerini değiştirmek mümkündür ama
-yanlış giderse distro görünmez hâle gelir. Bu yüzden ad, uygulamanın kendi verisinde
-(`%LOCALAPPDATA%\wsl-extended\data.json`) saklanır: listede senin verdiğin ad görünür,
-tüm komutlar gerçek adla çalışır ve eşleme durum çubuğunda gösterilir. Alanı boş
-bırakırsan gerçek ada döner.
+## Öne çıkan davranışlar
 
-## Store — dağıtım kurma
+**Görünen ad.** WSL'de yeniden adlandırma komutu yoktur; registry'deki
+`DistributionName` değiştirilebilir ama hata hâlinde distro görünmez olur. Bunun yerine
+`n` ile verdiğin ad uygulamanın kendi verisinde (`%LOCALAPPDATA%\wsl-extended\data.json`)
+saklanır — komutlar her zaman gerçek adla çalışır ve eşleme durum çubuğunda görünür.
 
-`2` sekmesi `wsl --list --online` kataloğunu gösterir, kurulu olanlar işaretlenir.
-`enter` seçili dağıtımı indirip kurar.
+**Yedekleme.** `e` distroyu arşive yazar; biçim uzantıdan belirlenir (`.tar`, `.tar.gz`,
+`.vhdx`). Distro çalışıyorsa tutarlı arşiv için önce durdurulur. `wsl --export` yüzde
+bildirmediğinden ilerleme, yazılmakta olan dosyanın boyutundan okunur.
 
-Kurulum sırasında **terminal `wsl.exe`'ye devredilir**, böylece kendi indirme yüzdesini
-çizebilir; bitince arayüz geri gelir. Çıktıyı boru hattına almak ilerleme çubuğunu
-bastırıyordu — `wsl.exe` yüzdeyi yalnızca gerçek bir konsola bağlıyken gösteriyor.
-Aynı yaklaşım `p` ile imaj çekmede de kullanılır.
+**Yapılandırma düzenleme.** Düzenleme dosyanın satırları üzerinde yerinde yapılır:
+yorumların, boş satırların ve bu araçta karşılığı olmayan anahtarların hiçbiri kaybolmaz.
+Kaydetmeden önce fark gösterilir, eski hâl `.bak` olarak saklanır. Boş bırakılan alan
+anahtarı siler, yani WSL kendi varsayılanına döner.
 
-Kurulum `--no-launch` ile yapılır: dağıtım kurulumdan sonra otomatik açılmaz.
-Kullanıcı hesabını, ilk kez `enter` ile kabuğa girdiğinde oluşturursun. (Bu bayrak
-olmadan `wsl.exe` kurulum biter bitmez dağıtımı açıp hesap sormaya çalışır ve
-arayüzü kilitler.)
+**Dağıtım kurma.** `--no-launch` ile kurulur; bu bayrak olmadan `wsl.exe` kurulum biter
+bitmez dağıtımı açıp hesap sormaya çalışır ve arayüzü kilitler. Kurulum sırasında terminal
+`wsl.exe`'ye devredilir, böylece kendi indirme yüzdesini çizebilir.
 
-## Sistem paneli ve hızlı açma
+**Detay paneli.** `v` distro kapalıysa onu **başlatmaz**; registry ve dosya sisteminden
+okunabilenleri gösterir. Çalışıyorsa çekirdek, IP ve disk kullanımı eklenir.
 
-`w` WSL geneli durumu gösterir: sürüm, kurulu ve çalışan distro sayısı, tüm
-distroların toplam disk kullanımı ve `wsl --status` çıktısı. Çıktı yerelleştirilmiş
-olduğu için ayrıştırılmadan olduğu gibi gösterilir.
-
-`o` seçili distroyu Windows Gezgini'nde (`\\wsl.localhost\<ad>`), VS Code'da
-(`code --remote wsl+<ad>`) ya da ayrı bir konsol penceresinde açar.
-
-## Kapsayıcı oluşturma
-
-`p` Containers ve Images sekmelerinde imaj çekme ve kapsayıcı çalıştırma menüsünü
-açar. Çalıştırma formu imaj, ad, port eşlemesi, birim ve komut alır; boş bırakılan
-alanlar komuta eklenmez ve onay ekranı çalıştırılacak tam komutu gösterir.
-
-## Detay paneli
-
-`I` seçili distronun her şeyini tek ekranda gösterir: durum, WSL sürümü, registry
-kimliği, kurulum dizini, disk dosyası ve boyutu, varsayılan UID. Distro çalışıyorsa
-çekirdek sürümü, IP adresi ve kök disk kullanımı da eklenir.
-
-Distro **kapalıysa panel onu başlatmaz** — yalnızca registry ve dosya sisteminden
-okunabilen bilgileri gösterir ve canlı veri için `s` ile başlatmanı önerir. Bilgi
-almak uğruna distro başlatmak, istemediğin bir yan etki olurdu.
-
-## Disk işlemleri
-
-`D` menüsü `wsl --manage` altındaki işlemleri toplar: diski büyüt (`--resize`),
-seyrek diski aç/kapat (`--set-sparse`), başka konuma taşı (`--move`). Seyrek disk
-açıkken silinen dosyaların yeri Windows tarafında otomatik geri kazanılır.
-
-Büyütme ve taşıma distro **kapalıyken** çalışır; distro çalışıyorsa menü bunu
-önceden söyler.
-
-## Yedekleme
-
-`e` seçili distroyu tek bir arşive yazar. Biçim uzantıdan belirlenir: `.tar`,
-`.tar.gz` ya da `.vhdx`. Distro çalışıyorsa tutarlı bir arşiv için önce durdurulur —
-onay ekranı bunu söyler. Arşiv yazılırken durum çubuğu o ana kadar yazılan boyutu
-gösterir.
-
-`i` bir arşivden yeni distro oluşturur. **Klonlamak** için önce `e` ile yedek al,
-sonra `i` ile başka bir ad ver.
-
-## Yapılandırma düzenleyicisi
-
-`c` Windows tarafındaki `%UserProfile%\.wslconfig` dosyasını (bellek, işlemci, takas,
-ağ kipi…), `C` ise seçili distronun içindeki `/etc/wsl.conf` dosyasını (systemd,
-varsayılan kullanıcı, automount, interop…) düzenler.
-
-Alanlar arasında `j`/`k` ile gezinir, `enter` ile düzenler, `backspace` ile
-temizlersin. Boş bırakılan alan dosyadan **silinir** — böylece WSL kendi
-varsayılanına döner. `s` kaydeder, ama önce yazılacak farkı gösterip onay ister.
-
-Düzenleme dosyanın satırları üzerinde yapılır: yorumların, boş satırların ve bu
-araçta karşılığı olmayan anahtarların hiçbiri kaybolmaz. Kaydetmeden önce eski
-hâl `.bak` uzantısıyla saklanır.
-
-`.wslconfig` değişikliği ancak WSL sanal makinesi yeniden kurulduğunda etkili olur;
-kaydettikten sonra `X` ile WSL'i kapatman gerekir. `wsl.conf` için ilgili distroyu
-yeniden başlatmak yeterlidir. `C` tuşu dosyayı okumak için distroyu başlatır.
-
-## Testler
+## Geliştirme
 
 ```bash
 go test ./...
 ```
 
-Gerçek `wsl.exe` ve `wslc.exe` çağıran entegrasyon testleri ayrı bir etikettedir.
-Yalnızca okuma yaparlar; hiçbir distro, kapsayıcı ya da birim oluşturmaz veya silmezler:
+Gerçek `wsl.exe` ve `wslc.exe` çağıran entegrasyon testleri ayrı etikettedir. Yalnızca
+okuma ve geri alınabilir başlat/durdur yaparlar; silme komutları hiçbir testte çağrılmaz:
 
 ```bash
-go test -tags integration -v ./...
+go test -tags integration ./...
 ```
 
-## Mimari notu
+### Mimari
 
-`internal/wsl` ve `internal/wslc` paketleri Bubble Tea'yi bilmez; saf Go tipleri ve
-`error` döndürür. Arayüz katmanı bunları `tea.Cmd` içine sarar. Böylece CLI
-sarmalayıcıları TUI olmadan test edilebilir.
+```
+cmd/wsl-extended/     giriş noktası
+internal/wsl/         wsl.exe sarmalayıcı
+internal/wslc/        wslc.exe sarmalayıcı
+internal/wslconf/     .wslconfig / wsl.conf düzenleme
+internal/store/       uygulama verisi (takma adlar)
+internal/ui/          Bubble Tea katmanı
+```
 
-İki tuzak koda gömülü olarak çözülmüştür: `wsl.exe` çıktısını UTF-16LE yazdığı için
-her çağrıya `WSL_UTF8=1` geçilir, ve CLI çıktıları yerelleştirilmiş olabildiğinden
-hiçbir karar hata metnine bakarak verilmez.
+`internal/wsl`, `internal/wslc` ve `internal/wslconf` arayüz katmanını bilmez; saf Go
+tipleri ve `error` döndürür, böylece TUI olmadan test edilebilirler.
+
+İki tuzak koda gömülü olarak çözülmüştür: `wsl.exe` çıktısını UTF-16LE yazdığı için her
+çağrıya `WSL_UTF8=1` geçilir, ve CLI çıktıları yerelleştirilmiş olabildiğinden hiçbir
+karar hata metnine bakarak verilmez — yalnızca çıkış kodu ve JSON alanları kullanılır.
+
+Ayrıntılı tasarım kararları ve yol haritası: [docs/PLAN.md](docs/PLAN.md)
+
+## Bilinen sınırlar
+
+- Yalnızca Windows'ta çalışır (`wsl.exe` ve registry'ye bağımlıdır).
+- `wslc` JSON şeması belgelenmemiştir; alan adları Docker çıktısı örnek alınarak
+  yazılmış ve tip sürprizlerine karşı savunmacı tutulmuştur.
+- Kapsayıcı günlüğü/exec ve `/etc/wsl.conf` yazma henüz gerçek veriyle sınanmadı.
+- TUI içine gömülü terminal (pty) yoktur; kabuk açarken terminal komuta devredilir.
+
+## Lisans
+
+[MIT](LICENSE)
