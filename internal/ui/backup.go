@@ -11,6 +11,7 @@ import (
 
 	"github.com/singoesdeep/wsl-extended/internal/store"
 	"github.com/singoesdeep/wsl-extended/internal/wsl"
+	"github.com/singoesdeep/wsl-extended/internal/wslconf"
 )
 
 // newExportPrompt, seçili distro için hedef dosya soran formu kurar.
@@ -108,6 +109,48 @@ func (m Model) submitPrompt() (Model, tea.Cmd) {
 		} else {
 			m.notice, m.noticeErr = real+" gerçek adına döndü", false
 		}
+		return m, nil
+
+	case promptResize:
+		size := values[0]
+		if size == "" {
+			m.prompt.err = "Boyut boş olamaz."
+			return m, nil
+		}
+		if err := wslconf.CheckSize(size); err != nil {
+			m.prompt.err = err.Error()
+			return m, nil
+		}
+
+		name := m.prompt.subject
+		display := m.displayName(name)
+		m.prompt = promptModel{}
+		m.confirm = newConfirm(action{
+			kind: actDistroResize, target: name, display: display, size: size,
+			title: "Diski büyüt",
+			body: display + " diski " + size + " boyutuna getirilecek.\n" +
+				"Distro çalışıyorsa işlem başarısız olur; önce durdurmalısın.",
+			done: display + " diski " + size + " oldu",
+		})
+		return m, nil
+
+	case promptMove:
+		dir := values[0]
+		if dir == "" {
+			m.prompt.err = "Hedef klasör boş olamaz."
+			return m, nil
+		}
+
+		name := m.prompt.subject
+		display := m.displayName(name)
+		m.prompt = promptModel{}
+		m.confirm = newConfirm(action{
+			kind: actDistroMove, target: name, display: display, path: dir,
+			title: "Başka konuma taşı",
+			body: display + " şuraya taşınacak:\n" + dir +
+				"\n\nDistro çalışıyorsa işlem başarısız olur; önce durdurmalısın.",
+			done: display + " taşındı",
+		})
 		return m, nil
 
 	case promptExport:

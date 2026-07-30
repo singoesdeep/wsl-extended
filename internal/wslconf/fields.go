@@ -37,6 +37,9 @@ func validateSize(v string) error {
 	return nil
 }
 
+// CheckSize, bellek ya da disk boyutu yazımını doğrular (8GB, 512MB gibi).
+func CheckSize(v string) error { return validateSize(v) }
+
 func validateInt(v string) error {
 	n, err := strconv.Atoi(strings.TrimSpace(v))
 	if err != nil {

@@ -49,16 +49,18 @@ type logModel struct {
 func startLogs(target string) (logModel, tea.Cmd) {
 	ctx, cancel := context.WithCancel(context.Background())
 
-	m := logModel{active: true, target: target, follow: true, cancel: cancel}
-
 	ch, err := wslc.StreamLogs(ctx, target, logTail)
 	if err != nil {
 		cancel()
-		m.err = err
-		return m, nil
+		return logModel{active: true, target: target, err: err}, nil
 	}
-	m.ch = ch
+	return newStreamPanel(target, ch, cancel)
+}
 
+// newStreamPanel, hazır bir satır kanalını canlı panele bağlar. Günlükler ve
+// kurulum çıktısı aynı paneli kullanır: ikisi de akan metindir.
+func newStreamPanel(target string, ch <-chan string, cancel context.CancelFunc) (logModel, tea.Cmd) {
+	m := logModel{active: true, target: target, follow: true, cancel: cancel, ch: ch}
 	return m, waitForLine(ch)
 }
 

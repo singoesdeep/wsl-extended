@@ -14,6 +14,8 @@ const (
 	promptExport promptKind = iota
 	promptImport
 	promptAlias
+	promptResize
+	promptMove
 )
 
 type promptField struct {

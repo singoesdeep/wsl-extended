@@ -34,6 +34,10 @@ const (
 	actDistroImport
 	actWriteGlobalConf
 	actWriteDistroConf
+	actDistroInstall
+	actDistroResize
+	actDistroSparse
+	actDistroMove
 )
 
 // action, onaya sunulan ve onaylanınca çalıştırılacak iştir.
@@ -57,6 +61,8 @@ type action struct {
 	installDir string // import kurulum dizini
 	stopFirst  bool   // export öncesi distroyu durdur
 	content    string // yapılandırma dosyasının yazılacak hâli
+	size       string // disk yeniden boyutlandırma değeri
+	sparse     bool   // seyrek disk kipi
 }
 
 type actionDoneMsg struct {
@@ -96,6 +102,12 @@ func (a action) run() tea.Cmd {
 			err = wslconf.SaveFile(a.path, a.content)
 		case actWriteDistroConf:
 			err = wsl.WriteConf(ctx, a.target, a.content)
+		case actDistroResize:
+			err = wsl.Resize(ctx, a.target, a.size)
+		case actDistroSparse:
+			err = wsl.SetSparse(ctx, a.target, a.sparse)
+		case actDistroMove:
+			err = wsl.Move(ctx, a.target, a.path)
 		case actContainerStart:
 			err = wslc.StartContainer(ctx, a.target)
 		case actContainerStop:

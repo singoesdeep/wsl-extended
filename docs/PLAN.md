@@ -183,6 +183,51 @@ içeriği (yorumlar + `[boot] systemd=true`) doğru okundu. Root olarak stdin il
 yazma mekanizması `/tmp` üzerinde sınandı; `/etc/wsl.conf`'a yazma, kullanıcının
 distrosunu değiştirmemek için gerçek dosyada denenmedi.
 
+## 5b. Planın ötesi — ikinci tur
+
+Beş faz bittikten sonra eklenenler.
+
+**Görsel dil: minimal ve tipografik.** Çerçeve ve dolu arka plan kaldırıldı;
+hiyerarşi boşluk, hizalama, kalınlık ve renk tonuyla kuruluyor. Seçili satır
+dolu bir bloğa dönüşmediği için durum renkleri seçiliyken de okunur kalıyor —
+eski tasarımda seçili satırda hücre renkleri kayboluyordu.
+
+**`s` tek tuşa indi.** Duruma göre davranıyor: çalışanı durduruyor, durmuşu
+başlatıyor. Ayrı `S` tuşu kaldırıldı.
+
+**Görünen ad (takma ad).** WSL'de yeniden adlandırma komutu yok. Registry'deki
+`DistributionName` değiştirilebilir ama hata hâlinde distro görünmez olur.
+Bunun yerine ad, uygulamanın kendi verisinde saklanıyor
+(`%LOCALAPPDATA%\wsl-extended\data.json`); komutlar her zaman gerçek adı
+hedefliyor ve eşleme durum çubuğunda görünüyor. Registry'ye hiç dokunulmuyor.
+
+**Store sekmesi.** `wsl --list --online` kataloğu. Kurulum `--no-launch` ile
+yapılıyor: bu bayrak olmadan wsl.exe kurulumun ardından dağıtımı açıp kullanıcı
+hesabı sormaya çalışır ve TUI kilitlenir. Kurulum çıktısı canlı akıyor; wsl.exe
+ilerlemeyi taşıma dönüşüyle (`\r`) güncellediği için okuyucu hem `\n` hem `\r`
+ile bölüyor — yalnızca `\n` arayan bir okuyucu kurulum bitene kadar tek satır
+göstermezdi.
+
+Katalog ayrıştırması biçime dayanıyor: geçerli satırın ilk alanı yalnızca harf,
+rakam, nokta, tire ve alt çizgi içerir. Başlıktaki ve açıklamalardaki
+yerelleştirilmiş metinler böyle eleniyor.
+
+**Detay paneli (`I`).** Statik bilgiler registry'den (`Lxss` altındaki GUID,
+`BasePath`, `DefaultUid`) ve dosya sisteminden (`ext4.vhdx` boyutu) okunuyor;
+`golang.org/x/sys/windows/registry` kullanılıyor. Canlı bilgiler (çekirdek, IP,
+disk kullanımı) yalnızca distro **zaten çalışıyorsa** toplanıyor — bilgi almak
+için distro başlatmak istenmeyen bir yan etki olurdu. Canlı veriler tek bir
+kabuk çağrısında alınıyor.
+
+**Disk işlemleri menüsü (`D`).** `wsl --manage` altındaki resize / set-sparse /
+move işlemleri tek menüde. Resize ve move distro kapalıyken çalıştığı için menü
+distro çalışıyorken uyarı gösteriyor.
+
+Doğrulama: `Describe` gerçek makinede çalıştırıldı (GUID, kurulum dizini,
+1.07 GB disk boyutu doğru okundu, distro başlatılmadı) ve `ListOnline` 22
+dağıtımı açıklama satırlarını eleyerek ayrıştırdı. Kurulum akışı gerçek bir
+indirmeyle denenmedi.
+
 ## 6. Riskler ve dikkat noktaları
 
 - **`wsl --unregister` distroyu kalıcı siler.** Yedeği yoksa geri dönüş yok.

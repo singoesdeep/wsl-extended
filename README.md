@@ -2,7 +2,7 @@
 
 WSL distrolarını ve `wslc` kapsayıcılarını tek bir terminal arayüzünden yönetmek için Go ile yazılmış TUI.
 
-Sekmeli yapı: **Distros · Containers · Images · Volumes · Networks**
+Sekmeli yapı: **Distros · Store · Containers · Images · Volumes · Networks**
 
 ## Durum
 
@@ -40,17 +40,20 @@ go build -o bin/wsl-extended.exe ./cmd/wsl-extended
 | Tuş | İşlev |
 |---|---|
 | `Tab` / `Shift+Tab`, `h` / `l` | Sekme değiştir |
-| `1`–`5` | Doğrudan sekmeye git |
+| `1`–`6` | Doğrudan sekmeye git |
 | `j` / `k`, ok tuşları | Satır gezinme |
 | `g` / `G` | Listenin başı / sonu |
-| `Enter` | Kabuğa gir (distro veya çalışan kapsayıcı) |
-| `L` | Canlı günlük paneli (kapsayıcı) |
-| `t` | Kaynak kullanımı paneli |
+| `s` | **Başlat veya durdur** — çalışıyorsa durdurur, duruyorsa başlatır |
+| `Enter` | Kabuğa gir; Store sekmesinde kurulumu başlatır |
+| `I` | Distro detay paneli |
+| `D` | Disk işlemleri menüsü (büyüt / seyrek / taşı) |
+| `n` | Görünen adı değiştir (takma ad) |
 | `e` | Distroyu dışa aktar (yedekle) |
 | `i` | Arşivden distro oluştur |
 | `c` | `.wslconfig` düzenleyicisi (tüm WSL) |
 | `C` | Seçili distronun `wsl.conf` düzenleyicisi |
-| `s` / `S` | Başlat / durdur (distro veya kapsayıcı) |
+| `L` | Canlı günlük paneli (kapsayıcı) |
+| `t` | Kaynak kullanımı paneli |
 | `K` | Kapsayıcıyı sonlandır (kill) |
 | `u` | Distroyu varsayılan yap |
 | `d` | Sil |
@@ -70,6 +73,44 @@ Durum değiştiren her işlem onay ister. İki kip vardır:
 
 Onay açıkken tuşlar arkadaki listeye ulaşmaz ve otomatik yenileme durur; böylece
 onay beklerken imleç kayıp işlem yanlış hedefe uygulanamaz.
+
+## Görünen ad (takma ad)
+
+`n` ile bir distroya istediğin adı verebilirsin. **WSL'de yeniden adlandırma
+komutu yoktur**; registry'deki `DistributionName` değerini değiştirmek mümkündür ama
+yanlış giderse distro görünmez hâle gelir. Bu yüzden ad, uygulamanın kendi verisinde
+(`%LOCALAPPDATA%\wsl-extended\data.json`) saklanır: listede senin verdiğin ad görünür,
+tüm komutlar gerçek adla çalışır ve eşleme durum çubuğunda gösterilir. Alanı boş
+bırakırsan gerçek ada döner.
+
+## Store — dağıtım kurma
+
+`2` sekmesi `wsl --list --online` kataloğunu gösterir, kurulu olanlar işaretlenir.
+`Enter` seçili dağıtımı indirip kurar; ilerleme canlı akar.
+
+Kurulum `--no-launch` ile yapılır: dağıtım kurulumdan sonra otomatik açılmaz.
+Kullanıcı hesabını, ilk kez `Enter` ile kabuğa girdiğinde oluşturursun. (Bu bayrak
+olmadan `wsl.exe` kurulum biter bitmez dağıtımı açıp hesap sormaya çalışır ve
+arayüzü kilitler.)
+
+## Detay paneli
+
+`I` seçili distronun her şeyini tek ekranda gösterir: durum, WSL sürümü, registry
+kimliği, kurulum dizini, disk dosyası ve boyutu, varsayılan UID. Distro çalışıyorsa
+çekirdek sürümü, IP adresi ve kök disk kullanımı da eklenir.
+
+Distro **kapalıysa panel onu başlatmaz** — yalnızca registry ve dosya sisteminden
+okunabilen bilgileri gösterir ve canlı veri için `s` ile başlatmanı önerir. Bilgi
+almak uğruna distro başlatmak, istemediğin bir yan etki olurdu.
+
+## Disk işlemleri
+
+`D` menüsü `wsl --manage` altındaki işlemleri toplar: diski büyüt (`--resize`),
+seyrek diski aç/kapat (`--set-sparse`), başka konuma taşı (`--move`). Seyrek disk
+açıkken silinen dosyaların yeri Windows tarafında otomatik geri kazanılır.
+
+Büyütme ve taşıma distro **kapalıyken** çalışır; distro çalışıyorsa menü bunu
+önceden söyler.
 
 ## Yedekleme
 

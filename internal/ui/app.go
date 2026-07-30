@@ -30,6 +30,7 @@ type tabID int
 
 const (
 	tabDistros tabID = iota
+	tabStore
 	tabContainers
 	tabImages
 	tabVolumes
@@ -37,10 +38,15 @@ const (
 	tabCount
 )
 
-var tabNames = [tabCount]string{"Distros", "Containers", "Images", "Volumes", "Networks"}
+var tabNames = [tabCount]string{
+	"Distros", "Store", "Containers", "Images", "Volumes", "Networks",
+}
 
-// needsWSLC, sekmenin wslc.exe gerektirip gerektirmediğini söyler.
-func (t tabID) needsWSLC() bool { return t != tabDistros }
+// needsWSLC, sekmenin wslc.exe gerektirip gerektirmediğini söyler. Distro ve
+// mağaza sekmeleri yalnızca wsl.exe kullanır.
+func (t tabID) needsWSLC() bool {
+	return t != tabDistros && t != tabStore
+}
 
 type distrosMsg struct {
 	items []wsl.Distro
@@ -99,10 +105,14 @@ type Model struct {
 	// confirm açıkken tüm tuşlar diyaloga gider.
 	confirm confirmModel
 
-	logs   logModel
-	stats  statsModel
-	prompt promptModel
-	config configModel
+	online []wsl.OnlineDistro
+
+	logs    logModel
+	stats   statsModel
+	prompt  promptModel
+	config  configModel
+	inspect inspectModel
+	menu    menuModel
 
 	// progressPath boş değilken, süren işin yazdığı dosya büyüdükçe ilerleme
 	// gösterilir. wsl --export yüzde bildirmediği için ilerleme, dosyanın o
@@ -186,6 +196,9 @@ func (m Model) load(t tabID) tea.Cmd {
 		case tabDistros:
 			items, err := wsl.List(ctx)
 			return distrosMsg{items, err}
+		case tabStore:
+			items, err := wsl.ListOnline(ctx)
+			return onlineMsg{items, err}
 		case tabContainers:
 			items, err := wslc.Containers(ctx)
 			return containersMsg{items, err}
@@ -262,6 +275,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.stats.items, m.stats.err = msg.items, msg.err
 		return m, nil
 
+	case onlineMsg:
+		m.online, m.errs[tabStore] = msg.items, msg.err
+		m.lastRefresh = time.Now()
+		m.clampCursor(tabStore)
+		return m, nil
+
+	case inspectMsg:
+		m.busy, m.busyLabel = false, ""
+		alias := ""
+		if msg.err == nil {
+			alias = m.displayName(msg.info.Name)
+		}
+		m.inspect = inspectModel{active: true, info: msg.info, alias: alias, err: msg.err}
+		return m, nil
+
 	case configLoadedMsg:
 		m.busy, m.busyLabel = false, ""
 		if msg.err != nil {
@@ -335,12 +363,38 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		updated, confirmed := m.confirm.update(msg)
 		m.confirm = updated
 		if confirmed {
-			m.busy, m.busyLabel = true, act.title
 			m.notice, m.noticeErr = "", false
+
+			// Kurulum canlı çıktı akıttığı için tek seferlik iş modeline
+			// girmez; doğrudan akış paneline bağlanır.
+			if act.kind == actDistroInstall {
+				logs, cmd := startInstall(act.target)
+				m.logs = logs
+				return m, cmd
+			}
+
+			m.busy, m.busyLabel = true, act.title
 			if act.kind == actDistroExport {
 				m.progressPath, m.progressBytes = act.path, 0
 			}
 			return m, act.run()
+		}
+		return m, nil
+	}
+
+	if m.inspect.active {
+		switch msg.String() {
+		case "esc", "q", "I":
+			m.inspect = inspectModel{}
+		}
+		return m, nil
+	}
+
+	if m.menu.active {
+		updated, choice := m.menu.update(msg)
+		m.menu = updated
+		if choice != "" {
+			return m.handleDiskChoice(choice)
 		}
 		return m, nil
 	}
@@ -407,7 +461,28 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 
 	case "enter":
+		// Mağazada enter kurulum başlatır, diğer sekmelerde kabuk açar.
+		if m.active == tabStore {
+			return m.confirmInstall()
+		}
 		return m.openShell()
+
+	case "I":
+		if m.active == tabDistros {
+			if d, ok := m.selectedDistro(); ok {
+				m.busy, m.busyLabel = true, "bilgiler toplanıyor"
+				return m, loadInspect(d)
+			}
+		}
+		return m, nil
+
+	case "D":
+		if m.active == tabDistros {
+			if d, ok := m.selectedDistro(); ok {
+				m.menu = diskMenu(m.displayName(d.Name), d.IsRunning())
+			}
+		}
+		return m, nil
 
 	case "L":
 		if m.active == tabContainers && m.wslcOK {
@@ -482,7 +557,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.active = (m.active - 1 + tabCount) % tabCount
 		return m, m.load(m.active)
 
-	case "1", "2", "3", "4", "5":
+	case "1", "2", "3", "4", "5", "6":
 		m.active = tabID(msg.String()[0] - '1')
 		return m, m.load(m.active)
 
@@ -515,6 +590,8 @@ func (m Model) count(t tabID) int {
 	switch t {
 	case tabDistros:
 		return len(m.distros)
+	case tabStore:
+		return len(m.online)
 	case tabContainers:
 		return len(m.containers)
 	case tabImages:
@@ -593,6 +670,12 @@ func (m Model) viewBody(height int) string {
 	if m.config.active {
 		return m.config.view(m.width, height)
 	}
+	if m.inspect.active {
+		return m.inspect.view(m.width, height)
+	}
+	if m.menu.active {
+		return m.menu.view(m.width)
+	}
 	if m.logs.active {
 		return m.logs.view(m.width, height)
 	}
@@ -637,6 +720,23 @@ func (m Model) tableData() ([]column, [][]string) {
 				theme.StateDot(d.IsRunning()) + " " + m.displayName(d.Name),
 				string(d.State), d.Version, def,
 			})
+		}
+		return cols, rows
+
+	case tabStore:
+		cols := []column{
+			{title: "DISTRO"},
+			{title: "FRIENDLY NAME"},
+			{title: "DURUM", width: 12},
+		}
+		installed := m.installedNames()
+		rows := make([][]string, 0, len(m.online))
+		for _, o := range m.online {
+			state := ""
+			if installed[strings.ToLower(o.Name)] {
+				state = "kurulu"
+			}
+			rows = append(rows, []string{o.Name, o.Friendly, state})
 		}
 		return cols, rows
 
@@ -709,7 +809,9 @@ func (m Model) tableData() ([]column, [][]string) {
 func (m Model) emptyMessage() string {
 	switch m.active {
 	case tabDistros:
-		return "Kurulu distro yok.  wsl --install ile bir tane ekleyebilirsin."
+		return "Kurulu distro yok.  Store sekmesinden (2) bir tane kurabilirsin."
+	case tabStore:
+		return "Katalog boş.  İnternet bağlantısını kontrol et."
 	case tabContainers:
 		return "Kapsayıcı yok.  wslc run ile bir tane başlatabilirsin."
 	case tabImages:
@@ -740,8 +842,21 @@ func (m Model) viewHelp() string {
 				theme.HelpKey.Render("G") + " takibe dön  ·  " +
 				theme.HelpKey.Render("esc") + " kapat")
 	}
-	if m.stats.active {
+	if m.stats.active || m.inspect.active {
 		return theme.Help.Render(theme.HelpKey.Render("esc") + " kapat")
+	}
+	if m.menu.active {
+		return theme.Help.Render(
+			theme.HelpKey.Render("j/k") + " seç  ·  " +
+				theme.HelpKey.Render("enter") + " uygula  ·  " +
+				theme.HelpKey.Render("esc") + " kapat")
+	}
+	if m.active == tabStore {
+		return theme.Help.Render(
+			theme.HelpKey.Render("enter") + " kur  ·  " +
+				theme.HelpKey.Render("j/k") + " gezin  ·  " +
+				theme.HelpKey.Render("tab") + " sekme  ·  " +
+				theme.HelpKey.Render("q") + " çık")
 	}
 	if m.config.active {
 		if m.config.editing {
@@ -770,6 +885,7 @@ func (m Model) viewHelp() string {
 		{"s", "başlat/durdur"},
 		{"d", "sil"},
 		{"L", "günlük"},
+		{"I", "detay"},
 		{"e", "yedekle"},
 		{"c", "ayarlar"},
 		{"q", "çık"},
@@ -783,6 +899,7 @@ func (m Model) viewHelp() string {
 			[2]string{"X", "WSL'i kapat"},
 			[2]string{"i", "arşivden distro oluştur"},
 			[2]string{"n", "görünen adı değiştir"},
+			[2]string{"D", "disk işlemleri"},
 			[2]string{"C", "distronun wsl.conf'u"},
 			[2]string{"t", "kaynak kullanımı"},
 			[2]string{"r", "yenile"},
