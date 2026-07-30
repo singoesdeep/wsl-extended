@@ -138,18 +138,20 @@ func (m Model) actionFor(key string) (action, bool) {
 		}
 		switch key {
 		case "s":
+			// Tek tuş duruma göre davranır: çalışanı durdurur, durmuşu başlatır.
+			if d.IsRunning() {
+				return action{
+					kind: actDistroStop, target: d.Name, display: d.Name,
+					title: "Distroyu durdur",
+					body:  d.Name + " durdurulacak. İçinde çalışan işler sonlanır.",
+					done:  d.Name + " durduruldu",
+				}, true
+			}
 			return action{
 				kind: actDistroStart, target: d.Name, display: d.Name,
 				title: "Distroyu başlat",
 				body:  d.Name + " başlatılacak.",
 				done:  d.Name + " başlatıldı",
-			}, true
-		case "S":
-			return action{
-				kind: actDistroStop, target: d.Name, display: d.Name,
-				title: "Distroyu durdur",
-				body:  d.Name + " durdurulacak. İçinde çalışan işler sonlanır.",
-				done:  d.Name + " durduruldu",
 			}, true
 		case "u":
 			return action{
@@ -180,18 +182,19 @@ func (m Model) actionFor(key string) (action, bool) {
 		name := c.Name()
 		switch key {
 		case "s":
+			if c.IsRunning() {
+				return action{
+					kind: actContainerStop, target: name, display: name,
+					title: "Kapsayıcıyı durdur",
+					body:  name + " nazikçe durdurulacak.",
+					done:  name + " durduruldu",
+				}, true
+			}
 			return action{
 				kind: actContainerStart, target: name, display: name,
 				title: "Kapsayıcıyı başlat",
 				body:  name + " başlatılacak.",
 				done:  name + " başlatıldı",
-			}, true
-		case "S":
-			return action{
-				kind: actContainerStop, target: name, display: name,
-				title: "Kapsayıcıyı durdur",
-				body:  name + " nazikçe durdurulacak.",
-				done:  name + " durduruldu",
 			}, true
 		case "K":
 			return action{

@@ -200,6 +200,40 @@ func TestContainerRemoveIsSimpleConfirm(t *testing.T) {
 	}
 }
 
+// s tuşu tek başına duruma göre davranmalı: duran başlar, çalışan durur.
+func TestStartStopToggleForDistro(t *testing.T) {
+	m := testModel()
+
+	m.distros = []wsl.Distro{{Name: "a", State: wsl.StateStopped}}
+	act, ok := m.actionFor("s")
+	if !ok || act.kind != actDistroStart {
+		t.Errorf("durmuş distroda s başlatmalıydı, kind = %v", act.kind)
+	}
+
+	m.distros = []wsl.Distro{{Name: "a", State: wsl.StateRunning}}
+	act, ok = m.actionFor("s")
+	if !ok || act.kind != actDistroStop {
+		t.Errorf("çalışan distroda s durdurmalıydı, kind = %v", act.kind)
+	}
+}
+
+func TestStartStopToggleForContainer(t *testing.T) {
+	m := testModel()
+	m.active = tabContainers
+
+	m.containers = []wslc.Container{{Names: "web", State: "exited"}}
+	act, ok := m.actionFor("s")
+	if !ok || act.kind != actContainerStart {
+		t.Errorf("durmuş kapsayıcıda s başlatmalıydı, kind = %v", act.kind)
+	}
+
+	m.containers = []wslc.Container{{Names: "web", State: "running"}}
+	act, ok = m.actionFor("s")
+	if !ok || act.kind != actContainerStop {
+		t.Errorf("çalışan kapsayıcıda s durdurmalıydı, kind = %v", act.kind)
+	}
+}
+
 // Boş listede aksiyon tuşu hiçbir şey yapmamalı.
 func TestActionOnEmptyListIsNoop(t *testing.T) {
 	m := testModel()

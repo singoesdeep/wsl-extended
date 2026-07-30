@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 
 	"github.com/singoesdeep/wsl-extended/internal/ui/theme"
 )
@@ -14,6 +13,7 @@ type promptKind int
 const (
 	promptExport promptKind = iota
 	promptImport
+	promptAlias
 )
 
 type promptField struct {
@@ -90,32 +90,40 @@ func (p promptModel) values() []string {
 }
 
 func (p promptModel) view(width int) string {
-	boxWidth := min(max(width-8, 40), 84)
+	fieldWidth := min(max(width-12, 24), 72)
 
 	var b strings.Builder
+	b.WriteString("\n")
 	b.WriteString(theme.DialogTitle.Render(p.title))
+	b.WriteString("\n")
+	b.WriteString(rule(width))
 	if p.body != "" {
 		b.WriteString("\n\n")
-		b.WriteString(p.body)
+		b.WriteString(theme.DialogBody.Render(p.body))
 	}
 	b.WriteString("\n")
 
 	for i, f := range p.fields {
+		selected := i == p.idx
+
+		mark := "  "
+		if selected {
+			mark = theme.Mark.Render(theme.SelectionMark) + " "
+		}
+
 		b.WriteString("\n")
-		b.WriteString(theme.DialogHint.Render(f.label))
+		b.WriteString(" " + mark + theme.Label.Render(f.label))
 		b.WriteString("\n")
 
-		value := f.value
-		style := theme.DialogInput
-		if i == p.idx {
-			style = theme.DialogInputOK
+		value, style := f.value, theme.DialogInput
+		if selected {
 			value += "▏" // imleç
+			style = theme.DialogInputOK
 		}
-		if value == "" {
-			value = f.hint
-			style = theme.DialogHint
+		if f.value == "" && !selected {
+			value, style = f.hint, theme.DialogHint
 		}
-		b.WriteString(style.Render(fitCell(value, boxWidth-8)))
+		b.WriteString("    " + style.Render(fitCell(value, fieldWidth)))
 		b.WriteString("\n")
 	}
 
@@ -125,9 +133,5 @@ func (p promptModel) view(width int) string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString("\n")
-	b.WriteString(theme.DialogHint.Render("tab alan değiştir  ·  enter onayla  ·  esc iptal"))
-
-	return lipgloss.NewStyle().Padding(1, 2).Render(
-		theme.Dialog.Width(boxWidth).Render(b.String()))
+	return b.String()
 }

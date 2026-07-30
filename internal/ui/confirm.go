@@ -75,22 +75,28 @@ func (c confirmModel) update(msg tea.KeyMsg) (confirmModel, bool) {
 }
 
 func (c confirmModel) view(width int) string {
-	boxWidth := min(max(width-8, 30), 72)
+	title := theme.DialogTitle
+	if c.requiresTyping() {
+		title = theme.DialogDangerTitle
+	}
 
 	var b strings.Builder
-	b.WriteString(theme.DialogTitle.Render(c.act.title))
+	b.WriteString("\n")
+	b.WriteString(title.Render(c.act.title))
+	b.WriteString("\n")
+	b.WriteString(rule(width))
 	b.WriteString("\n\n")
-	b.WriteString(c.act.body)
+	b.WriteString(theme.DialogBody.Render(c.act.body))
 	b.WriteString("\n\n")
 
 	if c.requiresTyping() {
-		b.WriteString(theme.DialogHint.Render(
-			"Onaylamak için adı yaz: ") + theme.DialogWord.Render(c.act.confirmWord))
-		b.WriteString("\n")
+		b.WriteString(theme.DialogHint.Render("Onaylamak için adı yaz: ") +
+			theme.DialogWord.Render(c.act.confirmWord))
+		b.WriteString("\n\n")
 
 		field := c.input
 		if field == "" {
-			field = " "
+			field = strings.Repeat(" ", lipgloss.Width(c.act.confirmWord))
 		}
 		style := theme.DialogInput
 		if c.input != "" && !c.satisfied() {
@@ -99,7 +105,7 @@ func (c confirmModel) view(width int) string {
 		if c.satisfied() {
 			style = theme.DialogInputOK
 		}
-		b.WriteString(style.Render(field))
+		b.WriteString("  " + style.Render(field))
 		b.WriteString("\n\n")
 
 		hint := "enter onayla  ·  esc iptal"
@@ -111,9 +117,10 @@ func (c confirmModel) view(width int) string {
 		b.WriteString(theme.DialogHint.Render("y onayla  ·  n iptal  ·  esc iptal"))
 	}
 
-	border := theme.Dialog
-	if c.requiresTyping() {
-		border = theme.DialogDanger
-	}
-	return lipgloss.NewStyle().Padding(1, 2).Render(border.Width(boxWidth).Render(b.String()))
+	return b.String()
+}
+
+// rule, panelleri başlıklarından ayıran ince çizgi.
+func rule(width int) string {
+	return theme.Rule.Render(" " + strings.Repeat("─", max(4, min(width-2, 72))))
 }

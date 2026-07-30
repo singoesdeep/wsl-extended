@@ -72,7 +72,8 @@ func resolveWidths(cols []column, total int) []int {
 // renderTable, başlık satırı + kaydırmalı gövde üretir. height, başlık dahil
 // toplam satır sayısıdır.
 func renderTable(cols []column, rows [][]string, cursor, width, height int) string {
-	widths := resolveWidths(cols, width-2) // theme.Row'un yatay dolgusu
+	// Satır başındaki işaretçi sütunu (2) ve yatay dolgu (2) düşülür.
+	widths := resolveWidths(cols, width-4)
 
 	var head []string
 	for i, c := range cols {
@@ -80,7 +81,7 @@ func renderTable(cols []column, rows [][]string, cursor, width, height int) stri
 	}
 
 	var b strings.Builder
-	b.WriteString(theme.Header.Render(strings.Join(head, "  ")))
+	b.WriteString(theme.Header.Render("  " + strings.Join(head, "  ")))
 
 	visible := max(1, height-1)
 	offset := 0
@@ -99,21 +100,25 @@ func renderTable(cols []column, rows [][]string, cursor, width, height int) stri
 				continue
 			}
 			cell := fitCell(rows[i][j], widths[j])
-			// Seçili satır zaten dolu arka planla çizildiği için hücre bazlı
-			// renklendirme yalnızca seçili olmayan satırlara uygulanır.
-			if c.state && !selected {
+			if selected {
+				cell = theme.RowSelected.Render(cell)
+			}
+			// Seçili satır dolu bir blok olmadığı için durum renkleri her
+			// durumda uygulanabilir.
+			if c.state {
 				cell = theme.StateStyle(strings.TrimSpace(rows[i][j])).Render(cell)
 			}
 			cells = append(cells, cell)
 		}
 
-		line := strings.Join(cells, "  ")
-		b.WriteString("\n")
+		// Seçim, dolu arka plan yerine soldaki ince işaretçiyle gösterilir.
+		mark := "  "
 		if selected {
-			b.WriteString(theme.RowSelected.Render(line))
-		} else {
-			b.WriteString(theme.Row.Render(line))
+			mark = theme.Mark.Render(theme.SelectionMark) + " "
 		}
+
+		b.WriteString("\n")
+		b.WriteString(theme.Row.Render(mark + strings.Join(cells, "  ")))
 	}
 
 	return b.String()

@@ -9,6 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/singoesdeep/wsl-extended/internal/store"
 	"github.com/singoesdeep/wsl-extended/internal/wsl"
 )
 
@@ -70,12 +71,45 @@ func defaultInstallDir(name string) string {
 	return filepath.Join(base, "WSL", name)
 }
 
+// newAliasPrompt, distroya görünen ad veren formu kurar.
+//
+// Bu ad yalnızca bu uygulamanın verisinde saklanır; WSL'deki gerçek distro adı
+// değişmez ve tüm komutlar gerçek adla çalışmaya devam eder.
+func newAliasPrompt(realName, current string) promptModel {
+	return promptModel{
+		active: true, kind: promptAlias, subject: realName,
+		title: "Görünen adı değiştir · " + realName,
+		body: "Bu ad yalnızca bu uygulamada görünür; WSL'deki gerçek ad değişmez\n" +
+			"ve komutlar gerçek adla çalışır. Boş bırakırsan gerçek ada döner.",
+		fields: []promptField{
+			{label: "Görünen ad", value: current, hint: realName},
+		},
+	}
+}
+
 // submitPrompt, formu doğrular ve geçerliyse işi üretir. Doğrulama başarısızsa
 // form açık kalır ve hatayı gösterir.
 func (m Model) submitPrompt() (Model, tea.Cmd) {
 	values := m.prompt.values()
 
 	switch m.prompt.kind {
+	case promptAlias:
+		real := m.prompt.subject
+		m.data.SetAlias(real, values[0])
+
+		m.prompt = promptModel{}
+		m.noticeAt = time.Now()
+		if err := store.Save(m.dataPath, m.data); err != nil {
+			m.notice, m.noticeErr = "Görünen ad kaydedilemedi: "+err.Error(), true
+			return m, nil
+		}
+		if m.data.HasAlias(real) {
+			m.notice, m.noticeErr = real+" artık "+m.data.Alias(real)+" olarak görünüyor", false
+		} else {
+			m.notice, m.noticeErr = real+" gerçek adına döndü", false
+		}
+		return m, nil
+
 	case promptExport:
 		path := values[0]
 		if path == "" {

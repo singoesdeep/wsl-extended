@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/singoesdeep/wsl-extended/internal/store"
 	"github.com/singoesdeep/wsl-extended/internal/wsl"
 )
 
@@ -190,6 +191,78 @@ func TestPromptSwallowsKeys(t *testing.T) {
 	}
 	if !strings.HasSuffix(m.prompt.fields[0].value, "j") {
 		t.Error("yazılan harf forma gitmedi")
+	}
+}
+
+// Takma ad yalnızca görünen adı değiştirmeli; komutlar gerçek adla çalışmaya
+// devam etmeli.
+func TestAliasChangesDisplayNameOnly(t *testing.T) {
+	m := testModel()
+	m.dataPath = filepath.Join(t.TempDir(), "data.json")
+	m.distros = []wsl.Distro{{Name: "FedoraLinux-44", State: wsl.StateStopped}}
+	m.prompt = newAliasPrompt("FedoraLinux-44", "")
+	m.prompt = setField(m.prompt, 0, "iş makinesi")
+
+	m, _ = m.submitPrompt()
+
+	if got := m.displayName("FedoraLinux-44"); got != "iş makinesi" {
+		t.Errorf("görünen ad = %q", got)
+	}
+
+	// Aksiyonlar gerçek adı hedeflemeli.
+	act, ok := m.actionFor("s")
+	if !ok {
+		t.Fatal("işlem üretilmedi")
+	}
+	if act.target != "FedoraLinux-44" {
+		t.Errorf("hedef = %q; gerçek ad kullanılmalıydı", act.target)
+	}
+}
+
+func TestAliasPersistsToDisk(t *testing.T) {
+	dir := t.TempDir()
+	m := testModel()
+	m.dataPath = filepath.Join(dir, "data.json")
+	m.distros = []wsl.Distro{{Name: "a"}}
+	m.prompt = newAliasPrompt("a", "")
+	m.prompt = setField(m.prompt, 0, "takma")
+
+	m, _ = m.submitPrompt()
+
+	loaded, err := store.Load(m.dataPath)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if loaded.Alias("a") != "takma" {
+		t.Errorf("diske yazılmadı: %v", loaded.Aliases)
+	}
+}
+
+// Boş ad verilince gerçek ada dönmeli.
+func TestAliasClearedRestoresRealName(t *testing.T) {
+	m := testModel()
+	m.dataPath = filepath.Join(t.TempDir(), "data.json")
+	m.distros = []wsl.Distro{{Name: "a"}}
+	m.data.SetAlias("a", "takma")
+
+	m.prompt = newAliasPrompt("a", "takma")
+	m.prompt = setField(m.prompt, 0, "")
+	m, _ = m.submitPrompt()
+
+	if m.displayName("a") != "a" {
+		t.Errorf("görünen ad = %q; gerçek ada dönmeliydi", m.displayName("a"))
+	}
+}
+
+// Takma ad kullanılırken gerçek ad durum çubuğunda görünmeli.
+func TestStatusShowsRealNameWhenAliased(t *testing.T) {
+	m := testModel()
+	m.distros = []wsl.Distro{{Name: "FedoraLinux-44"}}
+	m.data.SetAlias("FedoraLinux-44", "iş")
+
+	out := m.viewStatus()
+	if !strings.Contains(out, "FedoraLinux-44") || !strings.Contains(out, "iş") {
+		t.Errorf("durum çubuğu eşlemeyi göstermiyor: %q", out)
 	}
 }
 

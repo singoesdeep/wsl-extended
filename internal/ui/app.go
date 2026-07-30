@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
+	"github.com/singoesdeep/wsl-extended/internal/store"
 	"github.com/singoesdeep/wsl-extended/internal/ui/theme"
 	"github.com/singoesdeep/wsl-extended/internal/wsl"
 	"github.com/singoesdeep/wsl-extended/internal/wslc"
@@ -88,6 +89,10 @@ type Model struct {
 	wslcOK     bool
 	wslVersion string
 
+	// data, uygulamanın kendi kalıcı verisi (şu an distro takma adları).
+	data     *store.Data
+	dataPath string
+
 	lastRefresh time.Time
 	showHelp    bool
 
@@ -120,10 +125,21 @@ const noticeTTL = 6 * time.Second
 
 // New, başlangıç modelini kurar.
 func New() Model {
+	path := store.Path()
+	// Veri okunamazsa uygulama yine açılır; takma adlar boş kalır.
+	data, _ := store.Load(path)
+
 	return Model{
-		wslOK:  wsl.Available(),
-		wslcOK: wslc.Available(),
+		wslOK:    wsl.Available(),
+		wslcOK:   wslc.Available(),
+		data:     data,
+		dataPath: path,
 	}
+}
+
+// displayName, distronun listede görünecek adını verir.
+func (m Model) displayName(real string) string {
+	return m.data.Alias(real)
 }
 
 func (m Model) Init() tea.Cmd {
@@ -426,6 +442,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case "n":
+		// Görünen adı değiştirir; WSL'deki gerçek ad korunur.
+		if m.active == tabDistros {
+			if d, ok := m.selectedDistro(); ok {
+				current := ""
+				if m.data.HasAlias(d.Name) {
+					current = m.data.Alias(d.Name)
+				}
+				m.prompt = newAliasPrompt(d.Name, current)
+			}
+		}
+		return m, nil
+
 	case "c":
 		return m, loadGlobalConfig()
 
@@ -541,7 +570,11 @@ func (m Model) viewHeader() string {
 			tabs = append(tabs, theme.TabInactive.Render(label))
 		}
 	}
-	return theme.TabBar.Render(lipgloss.JoinHorizontal(lipgloss.Top, tabs...))
+
+	bar := theme.TabBar.Render(lipgloss.JoinHorizontal(lipgloss.Top, tabs...))
+	// Sekme şeridini içerikten ayıran ince çizgi, çerçeve kullanmadan
+	// bölümleri ayırır.
+	return bar + "\n" + theme.Rule.Render(strings.Repeat("─", max(1, m.width)))
 }
 
 // bodyHeight, gövdeye ayrılan yaklaşık satır sayısı. Sayfa kaydırma miktarı
@@ -600,7 +633,10 @@ func (m Model) tableData() ([]column, [][]string) {
 			if d.Default {
 				def = "✓"
 			}
-			rows = append(rows, []string{d.Name, string(d.State), d.Version, def})
+			rows = append(rows, []string{
+				theme.StateDot(d.IsRunning()) + " " + m.displayName(d.Name),
+				string(d.State), d.Version, def,
+			})
 		}
 		return cols, rows
 
@@ -731,7 +767,7 @@ func (m Model) viewHelp() string {
 		{"tab/1-5", "sekme"},
 		{"j/k", "gezin"},
 		{"enter", "kabuk"},
-		{"s/S", "başlat/durdur"},
+		{"s", "başlat/durdur"},
 		{"d", "sil"},
 		{"L", "günlük"},
 		{"e", "yedekle"},
@@ -746,6 +782,7 @@ func (m Model) viewHelp() string {
 			[2]string{"K", "sonlandır (kapsayıcı)"},
 			[2]string{"X", "WSL'i kapat"},
 			[2]string{"i", "arşivden distro oluştur"},
+			[2]string{"n", "görünen adı değiştir"},
 			[2]string{"C", "distronun wsl.conf'u"},
 			[2]string{"t", "kaynak kullanımı"},
 			[2]string{"r", "yenile"},
@@ -777,6 +814,14 @@ func (m Model) viewStatus() string {
 	}
 
 	parts := []string{"wsl-extended"}
+
+	// Takma ad kullanılıyorsa gerçek ad görünür kalmalı: komutlar onunla çalışır.
+	if m.active == tabDistros {
+		if d, ok := m.selectedDistro(); ok && m.data.HasAlias(d.Name) {
+			parts = append(parts, m.data.Alias(d.Name)+" → "+d.Name)
+		}
+	}
+
 	if m.wslVersion != "" {
 		parts = append(parts, "WSL "+m.wslVersion)
 	}

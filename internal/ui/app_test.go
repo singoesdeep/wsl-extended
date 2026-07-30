@@ -2,11 +2,14 @@ package ui
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/singoesdeep/wsl-extended/internal/store"
 	"github.com/singoesdeep/wsl-extended/internal/wsl"
 	"github.com/singoesdeep/wsl-extended/internal/wslc"
 )
@@ -17,6 +20,9 @@ func testModel() Model {
 	m := New()
 	m.wslOK, m.wslcOK = true, true
 	m.width, m.height = 120, 30
+	// Testler kullanıcının gerçek veri dosyasına yazmamalı.
+	m.data = &store.Data{Aliases: map[string]string{}}
+	m.dataPath = filepath.Join(os.TempDir(), "wsl-extended-test", "data.json")
 	return m
 }
 
