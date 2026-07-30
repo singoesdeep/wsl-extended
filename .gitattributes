@@ -1,0 +1,6 @@
+# Depoda her şey LF ile saklanır; çalışma kopyasında Git'in dokunmasına gerek yok.
+* text=auto eol=lf
+
+*.exe binary
+*.tar binary
+*.vhdx binary
