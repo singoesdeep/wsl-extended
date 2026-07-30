@@ -291,6 +291,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.clampCursor(tabStore)
 		return m, nil
 
+	case actionAfterRefreshMsg:
+		if msg.err == nil {
+			if msg.distros != nil {
+				m.distros = msg.distros
+				m.clampCursor(tabDistros)
+			}
+			if msg.containers != nil {
+				m.containers = msg.containers
+				m.clampCursor(tabContainers)
+			}
+		}
+		if act, ok := m.actionFor(msg.key); ok {
+			m.confirm = newConfirm(m.applyBulk(act))
+		}
+		return m, nil
+
 	case inspectMsg:
 		m.busy, m.busyLabel = false, ""
 		alias := ""
@@ -522,6 +538,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		default:
 			return m, nil
 		}
+	}
+
+	// Başlat/durdur kararı listedeki duruma bakar; liste iki saniyede bir
+	// yenilendiği için bayat olabilir ve WSL boştaki distroyu kendiliğinden
+	// kapatabilir. Karar vermeden önce durum tazelenir.
+	if msg.String() == "s" && (m.active == tabDistros || m.active == tabContainers) {
+		return m, m.refreshThenAct("s")
 	}
 
 	if act, ok := m.actionFor(msg.String()); ok {

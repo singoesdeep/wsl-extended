@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"golang.org/x/sys/windows/registry"
@@ -31,7 +32,9 @@ type Info struct {
 	DefaultUID uint64
 
 	// Canlı alanlar; distro çalışmıyorsa boş kalır.
-	Live     bool
+	Live bool
+	// LiveErr, distro çalıştığı hâlde canlı bilgi alınamadığında doludur.
+	LiveErr  error
 	Kernel   string
 	IP       string
 	DiskUsed string
@@ -101,13 +104,20 @@ func Describe(ctx context.Context, d Distro) (Info, error) {
 		return info, nil
 	}
 
-	// Tek çağrıda toplanır: her bilgi için ayrı komut çalıştırmak distroya
-	// gereksiz yük bindirir ve yavaştır.
-	const script = `uname -r; echo "%%"; df -h / | tail -n 1; echo "%%"; hostname -I 2>/dev/null | awk '{print $1}'`
+	// Her parça `|| true` ile sarılır ve metin işleme distroya bırakılmaz.
+	// Fedora'nın WSL imajında awk ve hostname yok; bunlara dayanan bir script
+	// 127 ile ölüp bütün canlı bilgiyi düşürüyordu. Ham çıktı alınıp Go
+	// tarafında ayrıştırmak, distroda hangi araçların bulunduğundan bağımsız
+	// çalışır.
+	const script = `{ uname -r || true; }; echo "%%"; ` +
+		`{ df -h / || true; }; echo "%%"; ` +
+		`{ ip -4 -o addr show scope global 2>/dev/null || true; }`
 
-	out, err := run(ctx, "-d", d.Name, "--exec", "sh", "-c", script)
+	out, err := run(ctx, "-d", d.Name, "--exec", "/bin/sh", "-c", script)
 	if err != nil {
-		return info, nil // canlı bilgi alınamadı; statik bilgiler yine de geçerli
+		// Statik bilgiler geçerli; canlı kısmın neden alınamadığı bildirilir.
+		info.LiveErr = err
+		return info, nil
 	}
 
 	info.Live = true
@@ -116,16 +126,62 @@ func Describe(ctx context.Context, d Distro) (Info, error) {
 		info.Kernel = strings.TrimSpace(parts[0])
 	}
 	if len(parts) > 1 {
-		// df çıktısı: dosyasistemi boyut kullanılan boş yüzde bağlama
-		if f := strings.Fields(parts[1]); len(f) >= 5 {
-			info.DiskUsed, info.DiskFree, info.DiskUse = f[2], f[3], f[4]
-		}
+		info.DiskUsed, info.DiskFree, info.DiskUse = parseDF(parts[1])
 	}
 	if len(parts) > 2 {
-		info.IP = strings.TrimSpace(parts[2])
+		info.IP = parseIP(parts[2])
 	}
 
 	return info, nil
+}
+
+// parseDF, `df -h /` çıktısındaki veri satırından kullanılan/boş/yüzde
+// değerlerini çıkarır. Başlık satırı yerelleştirilmiş olabileceği için sütun
+// adlarına değil, satırın biçimine bakılır.
+func parseDF(out string) (used, free, pct string) {
+	for _, line := range splitLines(out) {
+		f := strings.Fields(line)
+		if len(f) < 5 {
+			continue
+		}
+		// Başlıktaki "Use%" de yüzde işaretiyle biter; ayırt etmek için işaretin
+		// önünde sayı olması aranır.
+		if !strings.HasSuffix(f[4], "%") {
+			continue
+		}
+		if _, err := strconv.Atoi(strings.TrimSuffix(f[4], "%")); err != nil {
+			continue
+		}
+		return f[2], f[3], f[4]
+	}
+	return "", "", ""
+}
+
+// parseIP, `ip -o addr` çıktısından distronun IPv4 adresini alır.
+//
+// WSL'de loopback arayüzü de global kapsamda bir adres taşır (10.255.255.254);
+// bu ana makineye ait olduğu için atlanır ve gerçek arayüz aranır.
+func parseIP(out string) string {
+	for _, line := range splitLines(out) {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[1] == "lo" {
+			continue
+		}
+
+		for i, f := range fields {
+			if f != "inet" || i+1 >= len(fields) {
+				continue
+			}
+			addr := fields[i+1]
+			if slash := strings.Index(addr, "/"); slash > 0 {
+				addr = addr[:slash]
+			}
+			if addr != "" && !strings.HasPrefix(addr, "127.") {
+				return addr
+			}
+		}
+	}
+	return ""
 }
 
 // OpenExplorer, distronun dosya sistemini Windows Gezgini'nde açar.

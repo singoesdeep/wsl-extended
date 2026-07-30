@@ -206,6 +206,77 @@ func TestDiskMenuSwallowsKeys(t *testing.T) {
 	}
 }
 
+// Başlat/durdur kararı, tazelenen duruma göre verilmeli. Liste bayatken
+// çalışan bir distro için "başlat" sormak kullanıcıyı yanıltır.
+func TestToggleUsesRefreshedState(t *testing.T) {
+	m := testModel()
+	// Ekrandaki (bayat) durum: durmuş.
+	m.distros = []wsl.Distro{{Name: "alpha", State: wsl.StateStopped}}
+
+	// Tazeleme distronun aslında çalıştığını söylüyor.
+	updated, _ := m.Update(actionAfterRefreshMsg{
+		key:     "s",
+		distros: []wsl.Distro{{Name: "alpha", State: wsl.StateRunning}},
+	})
+	m = updated.(Model)
+
+	if !m.confirm.active {
+		t.Fatal("onay diyaloğu açılmadı")
+	}
+	if m.confirm.act.kind != actDistroStop {
+		t.Errorf("kind = %v; çalışan distro için durdurma beklenirdi", m.confirm.act.kind)
+	}
+	if !strings.Contains(m.confirm.act.done, "durduruldu") {
+		t.Errorf("bildirim = %q", m.confirm.act.done)
+	}
+}
+
+func TestToggleRefreshFailureFallsBackToKnownState(t *testing.T) {
+	m := testModel()
+	m.distros = []wsl.Distro{{Name: "alpha", State: wsl.StateRunning}}
+
+	// Tazeleme başarısız: eldeki durum korunmalı, işlem yine de kurulmalı.
+	updated, _ := m.Update(actionAfterRefreshMsg{key: "s", err: errTest})
+	m = updated.(Model)
+
+	if !m.confirm.active {
+		t.Fatal("tazeleme hatasında işlem hiç kurulmadı")
+	}
+	if m.confirm.act.kind != actDistroStop {
+		t.Errorf("kind = %v", m.confirm.act.kind)
+	}
+}
+
+// Distro çalışıyor ama canlı bilgi alınamadıysa panel "çalışmıyor" dememeli.
+func TestInspectRunningButNoLiveData(t *testing.T) {
+	m := inspectModel{active: true, info: wsl.Info{
+		Name: "alpha", State: wsl.StateRunning, Live: false,
+		LiveErr: errTest,
+	}}
+
+	out := m.view(100, 24)
+	if strings.Contains(out, "Distro çalışmıyor") {
+		t.Errorf("çalışan distro için 'çalışmıyor' yazdı:\n%s", out)
+	}
+	if !strings.Contains(out, "canlı bilgi alınamadı") {
+		t.Errorf("gerçek neden gösterilmiyor:\n%s", out)
+	}
+}
+
+// Başlatma onayı, WSL'in boştaki distroyu kapatacağını söylemeli.
+func TestStartConfirmExplainsIdleShutdown(t *testing.T) {
+	m := testModel()
+	m.distros = []wsl.Distro{{Name: "alpha", State: wsl.StateStopped}}
+
+	act, ok := m.actionFor("s")
+	if !ok {
+		t.Fatal("işlem üretilmedi")
+	}
+	if !strings.Contains(act.body, "kendiliğinden kapatır") {
+		t.Errorf("boşta kapanma uyarısı yok:\n%s", act.body)
+	}
+}
+
 // Detay paneli, distro çalışmıyorken canlı bilgi vaat etmemeli.
 func TestInspectViewStoppedDistro(t *testing.T) {
 	m := inspectModel{active: true, info: wsl.Info{

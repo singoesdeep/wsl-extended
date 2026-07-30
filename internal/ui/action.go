@@ -78,6 +78,36 @@ type actionDoneMsg struct {
 	err error
 }
 
+// actionAfterRefreshMsg, durum tazelendikten sonra işin kurulacağını bildirir.
+type actionAfterRefreshMsg struct {
+	key        string
+	distros    []wsl.Distro
+	containers []wslc.Container
+	err        error
+}
+
+// refreshThenAct, etkin sekmenin verisini tazeler ve ardından tuşa karşılık
+// gelen işi kurar. Böylece başlat/durdur kararı ekrandaki değil, o anki
+// gerçek duruma göre verilir.
+func (m Model) refreshThenAct(key string) tea.Cmd {
+	tab := m.active
+
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+		defer cancel()
+
+		switch tab {
+		case tabDistros:
+			ds, err := wsl.List(ctx)
+			return actionAfterRefreshMsg{key: key, distros: ds, err: err}
+		case tabContainers:
+			cs, err := wslc.Containers(ctx)
+			return actionAfterRefreshMsg{key: key, containers: cs, err: err}
+		}
+		return actionAfterRefreshMsg{key: key}
+	}
+}
+
 func (a action) run() tea.Cmd {
 	// Toplu iş: her hedef sırayla çalıştırılır, ilk hatada durulur. Kısmen
 	// tamamlanmış bir toplu işlemi sessizce başarılı saymak yanıltıcı olurdu.
@@ -184,8 +214,13 @@ func (m Model) actionFor(key string) (action, bool) {
 			return action{
 				kind: actDistroStart, target: d.Name, display: d.Name,
 				title: "Distroyu başlat",
-				body:  d.Name + " başlatılacak.",
-				done:  d.Name + " başlatıldı",
+				// WSL, içinde iş çalışmayan distroyu bir süre sonra kendiliğinden
+				// kapatır; bu söylenmezse "başlattım ama hâlâ durmuş" görünür.
+				body: d.Name + " başlatılacak.\n\n" +
+					"WSL, içinde çalışan bir iş yoksa distroyu kısa süre sonra\n" +
+					"kendiliğinden kapatır. Açık kalmasını istiyorsan enter ile\n" +
+					"kabuğa gir ya da içinde bir şey çalıştır.",
+				done: d.Name + " başlatıldı",
 			}, true
 		case "u":
 			return action{

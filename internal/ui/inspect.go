@@ -84,13 +84,24 @@ func (m inspectModel) view(width, height int) string {
 	}
 
 	b.WriteString("\n")
-	if i.Live {
+	switch {
+	case i.Live:
 		row("Çekirdek", i.Kernel)
 		row("IP adresi", i.IP)
 		if i.DiskUsed != "" {
 			row("Kök disk", i.DiskUsed+" kullanılıyor · "+i.DiskFree+" boş · "+i.DiskUse)
 		}
-	} else {
+
+	case i.State == wsl.StateRunning:
+		// Distro çalışıyor ama canlı bilgi alınamadı; "çalışmıyor" demek
+		// yanıltıcı olurdu.
+		msg := "Distro çalışıyor ama canlı bilgi alınamadı."
+		if i.LiveErr != nil {
+			msg += "\n  " + i.LiveErr.Error()
+		}
+		b.WriteString("\n  " + theme.DialogHint.Render(msg))
+
+	default:
 		b.WriteString("\n  " + theme.DialogHint.Render(
 			"Distro çalışmıyor; çekirdek, IP ve disk kullanımı için s ile başlat."))
 	}
