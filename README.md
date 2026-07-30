@@ -156,8 +156,6 @@ tipleri ve `error` döndürür, böylece TUI olmadan test edilebilirler.
 çağrıya `WSL_UTF8=1` geçilir, ve CLI çıktıları yerelleştirilmiş olabildiğinden hiçbir
 karar hata metnine bakarak verilmez — yalnızca çıkış kodu ve JSON alanları kullanılır.
 
-Ayrıntılı tasarım kararları ve yol haritası: [docs/PLAN.md](docs/PLAN.md)
-
 ## Bilinen sınırlar
 
 - Yalnızca Windows'ta çalışır (`wsl.exe` ve registry'ye bağımlıdır).

@@ -25,3 +25,6 @@ Thumbs.db
 
 # Yerel yapılandırma
 config.local.yaml
+
+# Tasarım notları yerelde tutulur, depoya girmez
+/docs/
