@@ -6,9 +6,9 @@ Sekmeli yapı: **Distros · Containers · Images · Volumes · Networks**
 
 ## Durum
 
-**Faz 4 tamam.** Listeler, aksiyonlar (onay kapısıyla), canlı günlük akışı, kaynak
-kullanımı paneli, tek tuşla kabuk ve distro yedekleme (export/import).
-Sırada Faz 5 var: `.wslconfig` ve `wsl.conf` düzenleyicisi.
+**Planlanan beş fazın tamamı bitti.** Listeler, aksiyonlar (onay kapısıyla), canlı
+günlük akışı, kaynak kullanımı paneli, tek tuşla kabuk, distro yedekleme
+(export/import) ve yapılandırma düzenleyicisi.
 
 Günlük ve kabuk özellikleri gerçek bir kapsayıcıyla **henüz denenmedi** — bu makinede
 hiç kapsayıcı yok. Komut sözdizimleri `wslc --help` çıktısına göre yazıldı ve akış
@@ -48,6 +48,8 @@ go build -o bin/wsl-extended.exe ./cmd/wsl-extended
 | `t` | Kaynak kullanımı paneli |
 | `e` | Distroyu dışa aktar (yedekle) |
 | `i` | Arşivden distro oluştur |
+| `c` | `.wslconfig` düzenleyicisi (tüm WSL) |
+| `C` | Seçili distronun `wsl.conf` düzenleyicisi |
 | `s` / `S` | Başlat / durdur (distro veya kapsayıcı) |
 | `K` | Kapsayıcıyı sonlandır (kill) |
 | `u` | Distroyu varsayılan yap |
@@ -78,6 +80,24 @@ gösterir.
 
 `i` bir arşivden yeni distro oluşturur. **Klonlamak** için önce `e` ile yedek al,
 sonra `i` ile başka bir ad ver.
+
+## Yapılandırma düzenleyicisi
+
+`c` Windows tarafındaki `%UserProfile%\.wslconfig` dosyasını (bellek, işlemci, takas,
+ağ kipi…), `C` ise seçili distronun içindeki `/etc/wsl.conf` dosyasını (systemd,
+varsayılan kullanıcı, automount, interop…) düzenler.
+
+Alanlar arasında `j`/`k` ile gezinir, `enter` ile düzenler, `backspace` ile
+temizlersin. Boş bırakılan alan dosyadan **silinir** — böylece WSL kendi
+varsayılanına döner. `s` kaydeder, ama önce yazılacak farkı gösterip onay ister.
+
+Düzenleme dosyanın satırları üzerinde yapılır: yorumların, boş satırların ve bu
+araçta karşılığı olmayan anahtarların hiçbiri kaybolmaz. Kaydetmeden önce eski
+hâl `.bak` uzantısıyla saklanır.
+
+`.wslconfig` değişikliği ancak WSL sanal makinesi yeniden kurulduğunda etkili olur;
+kaydettikten sonra `X` ile WSL'i kapatman gerekir. `wsl.conf` için ilgili distroyu
+yeniden başlatmak yeterlidir. `C` tuşu dosyayı okumak için distroyu başlatır.
 
 ## Testler
 

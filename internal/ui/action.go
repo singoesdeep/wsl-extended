@@ -8,6 +8,7 @@ import (
 
 	"github.com/singoesdeep/wsl-extended/internal/wsl"
 	"github.com/singoesdeep/wsl-extended/internal/wslc"
+	"github.com/singoesdeep/wsl-extended/internal/wslconf"
 )
 
 // actionTimeout, durum değiştiren komutlar için üst sınır. Listeleme
@@ -31,6 +32,8 @@ const (
 	actNetworkRemove
 	actDistroExport
 	actDistroImport
+	actWriteGlobalConf
+	actWriteDistroConf
 )
 
 // action, onaya sunulan ve onaylanınca çalıştırılacak iştir.
@@ -50,9 +53,10 @@ type action struct {
 	done string
 
 	// Yedekleme işlerine özgü alanlar.
-	path       string // export hedefi ya da import kaynağı
+	path       string // export hedefi, import kaynağı ya da yapılandırma yolu
 	installDir string // import kurulum dizini
 	stopFirst  bool   // export öncesi distroyu durdur
+	content    string // yapılandırma dosyasının yazılacak hâli
 }
 
 type actionDoneMsg struct {
@@ -88,6 +92,10 @@ func (a action) run() tea.Cmd {
 			err = wsl.Export(ctx, a.target, a.path)
 		case actDistroImport:
 			err = wsl.Import(ctx, a.target, a.installDir, a.path)
+		case actWriteGlobalConf:
+			err = wslconf.SaveFile(a.path, a.content)
+		case actWriteDistroConf:
+			err = wsl.WriteConf(ctx, a.target, a.content)
 		case actContainerStart:
 			err = wslc.StartContainer(ctx, a.target)
 		case actContainerStop:

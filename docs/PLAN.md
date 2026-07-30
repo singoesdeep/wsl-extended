@@ -158,10 +158,30 @@ Gerçek WSL'de uçtan uca doğrulandı: `FedoraLinux-44` dışa aktarıldı (579
 7 sn), geçici bir distro olarak içeri aktarıldı, sonra kaydından düşürüldü.
 Makine başlangıçtaki durumuna döndü.
 
-**Faz 5 — Konfig editörü**
+**Faz 5 — Konfig editörü** ✅
 `.wslconfig` (Windows tarafı, `%UserProfile%\.wslconfig`) ve distro içi `/etc/wsl.conf`.
 Form ile düzenle, **yazmadan önce diff göster**. Yedek kopya al (`.wslconfig.bak`).
 `.wslconfig` değişikliği `wsl --shutdown` gerektirir — kullanıcı uyarılır.
+
+Uygulamada netleşenler:
+- Düzenleme, dosyayı ayrıştırıp yeniden üreterek değil, **satırlar üzerinde
+  yerinde** yapılıyor. Yeniden üretme yaklaşımı kullanıcının yorumlarını,
+  boş satırlarını ve bu araçta karşılığı olmayan anahtarlarını sessizce
+  silerdi. Fedora'nın gerçek `wsl.conf` dosyasında da yorum satırları var.
+- Boş bırakılan alan, dosyaya boş değer yazmak yerine anahtarı **siliyor**;
+  böylece WSL kendi varsayılanına dönüyor.
+- `.wslconfig` UTF-8 BOM ile kaydedilmiş olabilir (Windows editörleri). BOM
+  temizlenmezse ilk bölüm başlığı tanınmaz ve dosyadaki tüm ayarlar görünmez
+  olurdu; `Parse` bunu kırpıyor.
+- CRLF satır sonu kullanan dosyalar kaydedilirken biçimini koruyor.
+- `wsl.conf` okuma/yazma distro içinde root olarak yapılıyor. Dosyanın var olup
+  olmadığı ayrımı kabuk tarafında (`2>/dev/null || true`) çözüldü, çünkü `cat`
+  hata mesajı distronun diline göre değişir.
+
+Doğrulama: `ReadConf` gerçek distroda çalıştırıldı ve Fedora'nın `wsl.conf`
+içeriği (yorumlar + `[boot] systemd=true`) doğru okundu. Root olarak stdin ile
+yazma mekanizması `/tmp` üzerinde sınandı; `/etc/wsl.conf`'a yazma, kullanıcının
+distrosunu değiştirmemek için gerçek dosyada denenmedi.
 
 ## 6. Riskler ve dikkat noktaları
 

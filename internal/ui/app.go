@@ -97,6 +97,7 @@ type Model struct {
 	logs   logModel
 	stats  statsModel
 	prompt promptModel
+	config configModel
 
 	// progressPath boş değilken, süren işin yazdığı dosya büyüdükçe ilerleme
 	// gösterilir. wsl --export yüzde bildirmediği için ilerleme, dosyanın o
@@ -210,7 +211,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tick()
 		}
-		if m.confirm.active || m.prompt.active {
+		if m.confirm.active || m.prompt.active || m.config.active {
 			return m, tick()
 		}
 		// Günlük paneli kendi akışından beslenir; liste yenilemeye gerek yok.
@@ -243,6 +244,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case statsMsg:
 		m.stats.items, m.stats.err = msg.items, msg.err
+		return m, nil
+
+	case configLoadedMsg:
+		m.busy, m.busyLabel = false, ""
+		if msg.err != nil {
+			m.notice, m.noticeErr, m.noticeAt = msg.err.Error(), true, time.Now()
+			return m, nil
+		}
+		m.config = newConfigModel(msg)
 		return m, nil
 
 	case shellDoneMsg:
@@ -315,6 +325,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.progressPath, m.progressBytes = act.path, 0
 			}
 			return m, act.run()
+		}
+		return m, nil
+	}
+
+	// Yapılandırma editörü açıkken tuşlar editöre aittir.
+	if m.config.active {
+		updated, act, save := m.config.update(msg)
+		m.config = updated
+		if save {
+			m.config = configModel{}
+			m.confirm = newConfirm(act)
 		}
 		return m, nil
 	}
@@ -402,6 +423,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "i":
 		if m.active == tabDistros {
 			m.prompt = newImportPrompt()
+		}
+		return m, nil
+
+	case "c":
+		return m, loadGlobalConfig()
+
+	case "C":
+		// wsl.conf distronun içindedir; okumak distroyu başlatır.
+		if m.active == tabDistros {
+			d, ok := m.selectedDistro()
+			if !ok {
+				return m, nil
+			}
+			m.busy, m.busyLabel = true, "wsl.conf okunuyor ("+d.Name+" başlatılıyor)"
+			return m, loadDistroConfig(d.Name)
 		}
 		return m, nil
 
@@ -520,6 +556,9 @@ func (m Model) viewBody(height int) string {
 	}
 	if m.prompt.active {
 		return m.prompt.view(m.width)
+	}
+	if m.config.active {
+		return m.config.view(m.width, height)
 	}
 	if m.logs.active {
 		return m.logs.view(m.width, height)
@@ -668,6 +707,19 @@ func (m Model) viewHelp() string {
 	if m.stats.active {
 		return theme.Help.Render(theme.HelpKey.Render("esc") + " kapat")
 	}
+	if m.config.active {
+		if m.config.editing {
+			return theme.Help.Render(
+				theme.HelpKey.Render("enter") + " bitir  ·  " +
+					theme.HelpKey.Render("esc") + " bitir")
+		}
+		return theme.Help.Render(
+			theme.HelpKey.Render("j/k") + " alan  ·  " +
+				theme.HelpKey.Render("enter") + " düzenle  ·  " +
+				theme.HelpKey.Render("backspace") + " temizle  ·  " +
+				theme.HelpKey.Render("s") + " kaydet  ·  " +
+				theme.HelpKey.Render("esc") + " kapat")
+	}
 	if m.prompt.active {
 		return theme.Help.Render(
 			theme.HelpKey.Render("tab") + " alan  ·  " +
@@ -683,6 +735,7 @@ func (m Model) viewHelp() string {
 		{"d", "sil"},
 		{"L", "günlük"},
 		{"e", "yedekle"},
+		{"c", "ayarlar"},
 		{"q", "çık"},
 	}
 	if m.showHelp {
@@ -693,6 +746,7 @@ func (m Model) viewHelp() string {
 			[2]string{"K", "sonlandır (kapsayıcı)"},
 			[2]string{"X", "WSL'i kapat"},
 			[2]string{"i", "arşivden distro oluştur"},
+			[2]string{"C", "distronun wsl.conf'u"},
 			[2]string{"t", "kaynak kullanımı"},
 			[2]string{"r", "yenile"},
 			[2]string{"?", "yardımı kapat"},

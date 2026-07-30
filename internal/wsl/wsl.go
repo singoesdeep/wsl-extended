@@ -125,6 +125,38 @@ func SetDefault(ctx context.Context, name string) error {
 	return err
 }
 
+// ReadConf, distro içindeki /etc/wsl.conf dosyasını okur.
+//
+// Dosya yoksa boş içerik döner: bu bir hata değil, henüz yapılandırma
+// yazılmamış olmasıdır. Ayrım kabuk tarafında yapılır, çünkü `cat`'in hata
+// mesajı distronun diline göre değişir ve metne göre karar verilemez.
+//
+// Komut distroyu başlatır; çağıran taraf kullanıcıyı uyarmalıdır.
+func ReadConf(ctx context.Context, distro string) (string, error) {
+	const script = "cat /etc/wsl.conf 2>/dev/null || true"
+
+	out, err := run(ctx, "-d", distro, "-u", "root", "--exec", "sh", "-c", script)
+	if err != nil {
+		return "", err
+	}
+	return out, nil
+}
+
+// WriteConf, /etc/wsl.conf dosyasını değiştirir ve önceki hâlini
+// /etc/wsl.conf.bak olarak saklar. Yazma root olarak yapılır.
+func WriteConf(ctx context.Context, distro, content string) error {
+	const script = "cp /etc/wsl.conf /etc/wsl.conf.bak 2>/dev/null || true; cat > /etc/wsl.conf"
+
+	cmd := command(ctx, "-d", distro, "-u", "root", "--exec", "sh", "-c", script)
+	cmd.Stdin = strings.NewReader(content)
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("wsl.conf yazılamadı: %s", strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 // Export, distroyu tek bir arşiv dosyasına yazar.
 //
 // Arşiv biçimi dosya uzantısından türetilir: .vhdx için vhd, .tar.gz/.tgz için
