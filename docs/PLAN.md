@@ -136,9 +136,27 @@ Uygulamada netleşenler:
 Doğrulama boşluğu: bu makinede hiç kapsayıcı olmadığı için `logs -f` ve
 `exec -it` gerçek veriyle denenemedi.
 
-**Faz 4 — Distro yedekleme**
+**Faz 4 — Distro yedekleme** ✅
 export/import/klonla, ilerleme göstergesi, hedef yol seçici.
-Export sırasında distro otomatik durdurulmalı (tutarlı yedek için) — kullanıcıya sorulur.
+Export sırasında distro otomatik durdurulur (tutarlı yedek için) — onay ekranı söyler.
+
+Uygulamada netleşenler:
+- `wsl --export` yüzde bildirmiyor. İlerleme, yazılmakta olan dosyanın o ana
+  kadarki boyutundan okunuyor: dürüst ve ek süreç gerektirmiyor.
+- Arşiv biçimi uzantıdan türetiliyor (`.tar`, `.tar.gz`, `.vhdx`). Biçim yanlış
+  seçilirse dosya yazılıyor ama içeri aktarılamıyor, bu yüzden `--format` ve
+  `--vhd` bayrakları otomatik ekleniyor.
+- Klonlama ayrı bir komut olarak eklenmedi: export + farklı adla import zaten
+  klonlamadır ve import formu bunu anlatıyor. Ayrı bir tuş, aynı işin ikinci
+  bir kod yolu olurdu.
+- `unregister` onayına yedek alma kısayolu **bilerek** bağlanmadı. Ad yazdırma
+  kipinde her tuş yazılan metnin parçasıdır; oraya kısayol koymak kipin
+  bütünlüğünü bozardı. Onun yerine diyalog, esc ile çıkıp `e` ile yedek almayı
+  öneriyor.
+
+Gerçek WSL'de uçtan uca doğrulandı: `FedoraLinux-44` dışa aktarıldı (579 MB,
+7 sn), geçici bir distro olarak içeri aktarıldı, sonra kaydından düşürüldü.
+Makine başlangıçtaki durumuna döndü.
 
 **Faz 5 — Konfig editörü**
 `.wslconfig` (Windows tarafı, `%UserProfile%\.wslconfig`) ve distro içi `/etc/wsl.conf`.

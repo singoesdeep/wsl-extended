@@ -68,6 +68,24 @@ func TestParseStateKeepsUnknownValues(t *testing.T) {
 	}
 }
 
+// Arşiv biçimi uzantıdan türetilir; yanlış biçim, içeri aktarılamayan bir
+// yedek dosyası üretir.
+func TestArchiveFormat(t *testing.T) {
+	cases := map[string]string{
+		`C:\yedek\a.tar`:     "",
+		`C:\yedek\a.tar.gz`:  "tar.gz",
+		`C:\yedek\a.TGZ`:     "tar.gz",
+		`C:\yedek\a.vhdx`:    "vhd",
+		`C:\yedek\a.VHD`:     "vhd",
+		`C:\yedek\uzantısız`: "",
+	}
+	for path, want := range cases {
+		if got := archiveFormat(path); got != want {
+			t.Errorf("archiveFormat(%q) = %q, %q bekleniyordu", path, got, want)
+		}
+	}
+}
+
 func TestParseListEmpty(t *testing.T) {
 	if got := parseList(""); len(got) != 0 {
 		t.Errorf("boş çıktı için boş dilim bekleniyordu, %+v bulundu", got)

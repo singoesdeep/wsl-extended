@@ -29,6 +29,8 @@ const (
 	actImageRemove
 	actVolumeRemove
 	actNetworkRemove
+	actDistroExport
+	actDistroImport
 )
 
 // action, onaya sunulan ve onaylanınca çalıştırılacak iştir.
@@ -46,6 +48,11 @@ type action struct {
 
 	// done, işlem başarıyla bittiğinde gösterilecek bildirim.
 	done string
+
+	// Yedekleme işlerine özgü alanlar.
+	path       string // export hedefi ya da import kaynağı
+	installDir string // import kurulum dizini
+	stopFirst  bool   // export öncesi distroyu durdur
 }
 
 type actionDoneMsg struct {
@@ -70,6 +77,17 @@ func (a action) run() tea.Cmd {
 			err = wsl.Unregister(ctx, a.target)
 		case actWSLShutdown:
 			err = wsl.Shutdown(ctx)
+		case actDistroExport:
+			// Çalışan bir distronun dosya sistemi export sırasında değişebilir;
+			// tutarlı bir arşiv için önce durdurulur.
+			if a.stopFirst {
+				if err = wsl.Terminate(ctx, a.target); err != nil {
+					break
+				}
+			}
+			err = wsl.Export(ctx, a.target, a.path)
+		case actDistroImport:
+			err = wsl.Import(ctx, a.target, a.installDir, a.path)
 		case actContainerStart:
 			err = wslc.StartContainer(ctx, a.target)
 		case actContainerStop:
@@ -136,8 +154,11 @@ func (m Model) actionFor(key string) (action, bool) {
 			return action{
 				kind: actDistroUnregister, target: d.Name, display: d.Name,
 				title: "Distroyu kalıcı olarak sil",
+				// Yedek alma kısayolu bilerek buraya bağlanmadı: ad yazdırma
+				// kipinde her tuş yazılan metnin parçasıdır, kısayol olamaz.
 				body: d.Name + " kaydından düşürülecek ve diskteki TÜM verisi silinecek.\n" +
-					"Bu işlemin geri dönüşü yoktur. Yedeğin yoksa her şey kaybolur.",
+					"Bu işlemin geri dönüşü yoktur. Yedeğin yoksa her şey kaybolur.\n\n" +
+					"Yedeğin yoksa esc ile çık ve önce e tuşuyla dışa aktar.",
 				confirmWord: d.Name,
 				done:        d.Name + " silindi",
 			}, true

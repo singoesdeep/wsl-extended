@@ -6,8 +6,9 @@ Sekmeli yapı: **Distros · Containers · Images · Volumes · Networks**
 
 ## Durum
 
-**Faz 3 tamam.** Listeler, aksiyonlar (onay kapısıyla), canlı günlük akışı, kaynak
-kullanımı paneli ve tek tuşla kabuk. Sırada Faz 4 var: distro yedekleme (export/import).
+**Faz 4 tamam.** Listeler, aksiyonlar (onay kapısıyla), canlı günlük akışı, kaynak
+kullanımı paneli, tek tuşla kabuk ve distro yedekleme (export/import).
+Sırada Faz 5 var: `.wslconfig` ve `wsl.conf` düzenleyicisi.
 
 Günlük ve kabuk özellikleri gerçek bir kapsayıcıyla **henüz denenmedi** — bu makinede
 hiç kapsayıcı yok. Komut sözdizimleri `wslc --help` çıktısına göre yazıldı ve akış
@@ -45,6 +46,8 @@ go build -o bin/wsl-extended.exe ./cmd/wsl-extended
 | `Enter` | Kabuğa gir (distro veya çalışan kapsayıcı) |
 | `L` | Canlı günlük paneli (kapsayıcı) |
 | `t` | Kaynak kullanımı paneli |
+| `e` | Distroyu dışa aktar (yedekle) |
+| `i` | Arşivden distro oluştur |
 | `s` / `S` | Başlat / durdur (distro veya kapsayıcı) |
 | `K` | Kapsayıcıyı sonlandır (kill) |
 | `u` | Distroyu varsayılan yap |
@@ -65,6 +68,16 @@ Durum değiştiren her işlem onay ister. İki kip vardır:
 
 Onay açıkken tuşlar arkadaki listeye ulaşmaz ve otomatik yenileme durur; böylece
 onay beklerken imleç kayıp işlem yanlış hedefe uygulanamaz.
+
+## Yedekleme
+
+`e` seçili distroyu tek bir arşive yazar. Biçim uzantıdan belirlenir: `.tar`,
+`.tar.gz` ya da `.vhdx`. Distro çalışıyorsa tutarlı bir arşiv için önce durdurulur —
+onay ekranı bunu söyler. Arşiv yazılırken durum çubuğu o ana kadar yazılan boyutu
+gösterir.
+
+`i` bir arşivden yeni distro oluşturur. **Klonlamak** için önce `e` ile yedek al,
+sonra `i` ile başka bir ad ver.
 
 ## Testler
 

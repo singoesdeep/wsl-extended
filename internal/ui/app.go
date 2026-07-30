@@ -7,6 +7,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -93,8 +94,15 @@ type Model struct {
 	// confirm açıkken tüm tuşlar diyaloga gider.
 	confirm confirmModel
 
-	logs  logModel
-	stats statsModel
+	logs   logModel
+	stats  statsModel
+	prompt promptModel
+
+	// progressPath boş değilken, süren işin yazdığı dosya büyüdükçe ilerleme
+	// gösterilir. wsl --export yüzde bildirmediği için ilerleme, dosyanın o
+	// ana kadarki boyutundan okunur.
+	progressPath  string
+	progressBytes int64
 
 	// busy, bir işlem sürerken otomatik yenilemeyi durdurur; aksi hâlde liste
 	// kullanıcının altından kayar.
@@ -193,7 +201,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// İşlem sürerken ya da onay beklenirken liste tazelenmez: imlecin
 		// altındaki satırın değişmesi yanlış hedefe işlem yapılmasına yol açar.
-		if m.busy || m.confirm.active {
+		if m.busy {
+			// Süren işin yazdığı dosya büyüdükçe ilerleme güncellenir.
+			if m.progressPath != "" {
+				if fi, err := os.Stat(m.progressPath); err == nil {
+					m.progressBytes = fi.Size()
+				}
+			}
+			return m, tick()
+		}
+		if m.confirm.active || m.prompt.active {
 			return m, tick()
 		}
 		// Günlük paneli kendi akışından beslenir; liste yenilemeye gerek yok.
@@ -237,6 +254,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case actionDoneMsg:
 		m.busy, m.busyLabel = false, ""
+		m.progressPath, m.progressBytes = "", 0
 		m.noticeAt = time.Now()
 		if msg.err != nil {
 			m.notice, m.noticeErr = msg.err.Error(), true
@@ -293,7 +311,21 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if confirmed {
 			m.busy, m.busyLabel = true, act.title
 			m.notice, m.noticeErr = "", false
+			if act.kind == actDistroExport {
+				m.progressPath, m.progressBytes = act.path, 0
+			}
 			return m, act.run()
+		}
+		return m, nil
+	}
+
+	// Form açıkken tuşlar forma aittir.
+	if m.prompt.active {
+		updated, submitted := m.prompt.update(msg)
+		m.prompt = updated
+		if submitted {
+			next, cmd := m.submitPrompt()
+			return next, cmd
 		}
 		return m, nil
 	}
@@ -356,6 +388,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.wslcOK {
 			m.stats = statsModel{active: true}
 			return m, loadStats()
+		}
+		return m, nil
+
+	case "e":
+		if m.active == tabDistros {
+			if d, ok := m.selectedDistro(); ok {
+				m.prompt = newExportPrompt(d)
+			}
+		}
+		return m, nil
+
+	case "i":
+		if m.active == tabDistros {
+			m.prompt = newImportPrompt()
 		}
 		return m, nil
 
@@ -471,6 +517,9 @@ func (m Model) viewBody(height int) string {
 	// düşündürecek bir görüntü kalmaz.
 	if m.confirm.active {
 		return m.confirm.view(m.width)
+	}
+	if m.prompt.active {
+		return m.prompt.view(m.width)
 	}
 	if m.logs.active {
 		return m.logs.view(m.width, height)
@@ -619,6 +668,12 @@ func (m Model) viewHelp() string {
 	if m.stats.active {
 		return theme.Help.Render(theme.HelpKey.Render("esc") + " kapat")
 	}
+	if m.prompt.active {
+		return theme.Help.Render(
+			theme.HelpKey.Render("tab") + " alan  ·  " +
+				theme.HelpKey.Render("enter") + " onayla  ·  " +
+				theme.HelpKey.Render("esc") + " iptal")
+	}
 
 	keys := [][2]string{
 		{"tab/1-5", "sekme"},
@@ -627,7 +682,7 @@ func (m Model) viewHelp() string {
 		{"s/S", "başlat/durdur"},
 		{"d", "sil"},
 		{"L", "günlük"},
-		{"t", "kaynak"},
+		{"e", "yedekle"},
 		{"q", "çık"},
 	}
 	if m.showHelp {
@@ -637,6 +692,8 @@ func (m Model) viewHelp() string {
 			[2]string{"u", "varsayılan yap (distro)"},
 			[2]string{"K", "sonlandır (kapsayıcı)"},
 			[2]string{"X", "WSL'i kapat"},
+			[2]string{"i", "arşivden distro oluştur"},
+			[2]string{"t", "kaynak kullanımı"},
 			[2]string{"r", "yenile"},
 			[2]string{"?", "yardımı kapat"},
 		)
@@ -652,7 +709,11 @@ func (m Model) viewHelp() string {
 func (m Model) viewStatus() string {
 	// İşlem durumu ve sonucu, sabit bilgilerin önüne geçer.
 	if m.busy {
-		return theme.Busy.Render("⟳ " + m.busyLabel + "…")
+		s := "⟳ " + m.busyLabel + "…"
+		if m.progressBytes > 0 {
+			s += "  " + humanBytes(m.progressBytes) + " yazıldı"
+		}
+		return theme.Busy.Render(s)
 	}
 	if m.notice != "" {
 		if m.noticeErr {

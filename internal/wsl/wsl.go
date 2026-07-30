@@ -125,6 +125,42 @@ func SetDefault(ctx context.Context, name string) error {
 	return err
 }
 
+// Export, distroyu tek bir arşiv dosyasına yazar.
+//
+// Arşiv biçimi dosya uzantısından türetilir: .vhdx için vhd, .tar.gz/.tgz için
+// tar.gz, diğer her şey için düz tar. Biçim yanlış seçilirse wsl.exe dosyayı
+// yazar ama içeri aktarma sırasında iş tutmaz.
+func Export(ctx context.Context, name, path string) error {
+	args := []string{"--export", name, path}
+	if f := archiveFormat(path); f != "" {
+		args = append(args, "--format", f)
+	}
+	_, err := run(ctx, args...)
+	return err
+}
+
+// Import, arşivi yeni bir distro olarak kaydeder.
+func Import(ctx context.Context, name, installDir, archive string) error {
+	args := []string{"--import", name, installDir, archive}
+	if archiveFormat(archive) == "vhd" {
+		args = append(args, "--vhd")
+	}
+	_, err := run(ctx, args...)
+	return err
+}
+
+func archiveFormat(path string) string {
+	lower := strings.ToLower(path)
+	switch {
+	case strings.HasSuffix(lower, ".vhdx"), strings.HasSuffix(lower, ".vhd"):
+		return "vhd"
+	case strings.HasSuffix(lower, ".tar.gz"), strings.HasSuffix(lower, ".tgz"):
+		return "tar.gz"
+	default:
+		return ""
+	}
+}
+
 // Unregister, distroyu kaydından düşürür ve diskteki tüm verisini siler.
 // Geri dönüşü yoktur; çağıran taraf önce açık onay almalıdır.
 func Unregister(ctx context.Context, name string) error {
